@@ -83,6 +83,21 @@ final authRepositoryProvider = Provider<AuthRepository>(
   (ref) => MockAuthRepository(ref.watch(mockDataSourceProvider)),
 );
 
+/// The one outbound HTTP client. Override in tests with a mock client so no test
+/// ever touches the network.
+final httpClientProvider = Provider<http.Client>((ref) {
+  final client = http.Client();
+  ref.onDispose(client.close);
+  return client;
+});
+
+/// Live market data. Unlike the repositories above, this one has no mock
+/// counterpart: it is always the real service, because a made up price on a
+/// screen labelled live would be a lie.
+final marketRepositoryProvider = Provider<MarketRepository>(
+  (ref) => TwelveDataMarketRepository(client: ref.watch(httpClientProvider)),
+);
+
 /// Application state.
 final sessionProvider = NotifierProvider<SessionController, SessionState>(
   SessionController.new,
