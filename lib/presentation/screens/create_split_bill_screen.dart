@@ -79,7 +79,7 @@ class _CreateSplitBillScreenState extends ConsumerState<CreateSplitBillScreen> {
     }
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     final form = _formKey.currentState;
     if (form == null || !form.validate()) return;
 
@@ -103,7 +103,7 @@ class _CreateSplitBillScreenState extends ConsumerState<CreateSplitBillScreen> {
     final cleanTitle = _titleController.text.trim();
     if (cleanTitle.isEmpty) return;
 
-    ref.read(splitBillsProvider.notifier).createBill(
+    await ref.read(splitBillsProvider.notifier).createBill(
           title: cleanTitle,
           totalAmount: rawAmount,
           category: _selectedCategory,

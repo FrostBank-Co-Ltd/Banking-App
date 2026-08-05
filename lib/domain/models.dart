@@ -109,6 +109,38 @@ class BankCard {
   String get last4 => number.replaceAll(' ', '').substring(number.replaceAll(' ', '').length - 4);
 
   String get maskedNumber => '\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 $last4';
+
+  BankCard copyWith({
+    String? id,
+    String? accountId,
+    String? label,
+    String? holderName,
+    String? number,
+    String? cvc,
+    String? expiry,
+    CardNetwork? network,
+    CardKind? kind,
+    CardStatus? status,
+    double? balance,
+    String? currencyCode,
+    double? spendingLimit,
+  }) {
+    return BankCard(
+      id: id ?? this.id,
+      accountId: accountId ?? this.accountId,
+      label: label ?? this.label,
+      holderName: holderName ?? this.holderName,
+      number: number ?? this.number,
+      cvc: cvc ?? this.cvc,
+      expiry: expiry ?? this.expiry,
+      network: network ?? this.network,
+      kind: kind ?? this.kind,
+      status: status ?? this.status,
+      balance: balance ?? this.balance,
+      currencyCode: currencyCode ?? this.currencyCode,
+      spendingLimit: spendingLimit ?? this.spendingLimit,
+    );
+  }
 }
 
 enum TxnType { deposit, transfer, qrPayment, cardPurchase }

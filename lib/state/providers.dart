@@ -87,6 +87,14 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return MockAuthRepository(ref.watch(mockDataSourceProvider));
 });
 
+final splitBillRepositoryProvider = Provider<SplitBillRepository>((ref) {
+  final useSupabase = ref.watch(useSupabaseProvider);
+  if (useSupabase && SupabaseConfig.isInitialized) {
+    return SupabaseSplitBillRepository();
+  }
+  return MockSplitBillRepository(ref.watch(mockDataSourceProvider));
+});
+
 /// The one outbound HTTP client. Override in tests with a mock client so no test
 /// ever touches the network.
 final httpClientProvider = Provider<http.Client>((ref) {

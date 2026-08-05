@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/supabase_config.dart';
 import '../domain/models.dart';
 import '../domain/repositories.dart';
+import '../domain/split_bill_model.dart';
 import 'mock_seed.dart';
 
 /// Robust enum parser resilient against case differences and string formatting.
@@ -117,6 +118,35 @@ class SupabaseMappers {
       memberSince: DateTime.parse(map['member_since'] as String),
     );
   }
+
+  static SplitBillParticipant splitParticipantFromMap(Map<String, dynamic> map) {
+    return SplitBillParticipant(
+      id: map['id'] as String,
+      name: map['name'] as String,
+      shareAmount: (map['share_amount'] as num).toDouble(),
+      status: _parseEnum(
+        SplitParticipantStatus.values,
+        map['status'] as String,
+        SplitParticipantStatus.pending,
+      ),
+      paidAt: map['paid_at'] != null ? DateTime.parse(map['paid_at'] as String) : null,
+    );
+  }
+
+  static SplitBill splitBillFromMap(
+    Map<String, dynamic> billMap,
+    List<SplitBillParticipant> participants,
+  ) {
+    return SplitBill(
+      id: billMap['id'] as String,
+      title: billMap['title'] as String,
+      totalAmount: (billMap['total_amount'] as num).toDouble(),
+      category: billMap['category'] as String,
+      createdAt: DateTime.parse(billMap['created_at'] as String),
+      createdBy: billMap['created_by'] as String,
+      participants: participants,
+    );
+  }
 }
 
 class SupabaseAccountRepository implements AccountRepository {
@@ -128,14 +158,16 @@ class SupabaseAccountRepository implements AccountRepository {
   @override
   Future<List<Account>> fetchAccounts() async {
     try {
-      final response = await _client.from('accounts').select();
+      final user = _client.auth.currentUser;
+      final userId = user?.id ?? MockSeed.customerId;
+      final response =
+          await _client.from('accounts').select().eq('user_id', userId);
       final list = (response as List)
           .map((item) => SupabaseMappers.accountFromMap(item as Map<String, dynamic>))
           .toList();
-      if (list.isEmpty) return MockSeed.accounts;
       return list;
-    } catch (_) {
-      return MockSeed.accounts;
+    } catch (e) {
+      throw RepositoryFailure('Could not load accounts from Supabase: $e');
     }
   }
 
@@ -147,15 +179,10 @@ class SupabaseAccountRepository implements AccountRepository {
       if (response != null) {
         return SupabaseMappers.accountFromMap(response);
       }
-      return MockSeed.accounts.firstWhere(
-        (a) => a.id == id,
-        orElse: () => MockSeed.accounts.first,
-      );
-    } catch (_) {
-      return MockSeed.accounts.firstWhere(
-        (a) => a.id == id,
-        orElse: () => MockSeed.accounts.first,
-      );
+      throw const RepositoryFailure('That account is no longer available.');
+    } catch (e) {
+      if (e is RepositoryFailure) rethrow;
+      throw RepositoryFailure('Could not fetch account: $e');
     }
   }
 
@@ -179,6 +206,7 @@ class SupabaseAccountRepository implements AccountRepository {
           'NM-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
       await _client.from('transactions').insert({
         'id': txnId,
+        'user_id': _client.auth.currentUser?.id,
         'account_id': accountId,
         'merchant': 'Deposit',
         'category': 'Deposit',
@@ -226,16 +254,19 @@ class SupabaseAccountRepository implements AccountRepository {
       final newTotal = source.totalBalance - amount;
       final newAvail = source.availableBalance - amount;
 
+      // Update source account
       await _client.from('accounts').update({
         'total_balance': newTotal,
         'available_balance': newAvail,
       }).eq('id', fromAccountId);
 
+      // Insert outflow transaction
       final txnId = 'txn_${DateTime.now().millisecondsSinceEpoch}';
       final refCode =
           'NM-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
       await _client.from('transactions').insert({
         'id': txnId,
+        'user_id': _client.auth.currentUser?.id,
         'account_id': fromAccountId,
         'merchant': recipient,
         'category': 'Transfer',
@@ -248,6 +279,48 @@ class SupabaseAccountRepository implements AccountRepository {
         'reference': refCode,
         'note': note,
       });
+
+      // Check if recipient matches an internal account in Supabase
+      try {
+        final accountsRes = await _client.from('accounts').select();
+        final allAccounts = (accountsRes as List)
+            .map((item) => SupabaseMappers.accountFromMap(item as Map<String, dynamic>))
+            .toList();
+
+        final recipientAccount = allAccounts.where((acc) =>
+            acc.id == recipient ||
+            acc.name.toLowerCase() == recipient.toLowerCase() ||
+            acc.shortCode.toLowerCase() == recipient.toLowerCase() ||
+            acc.maskedNumber == recipient).firstOrNull;
+
+        if (recipientAccount != null && recipientAccount.id != fromAccountId) {
+          final targetNewTotal = recipientAccount.totalBalance + amount;
+          final targetNewAvail = recipientAccount.availableBalance + amount;
+
+          await _client.from('accounts').update({
+            'total_balance': targetNewTotal,
+            'available_balance': targetNewAvail,
+          }).eq('id', recipientAccount.id);
+
+          await _client.from('transactions').insert({
+            'id': 'txn_${DateTime.now().millisecondsSinceEpoch + 1}',
+            'user_id': _client.auth.currentUser?.id,
+            'account_id': recipientAccount.id,
+            'merchant': source.name,
+            'category': 'Transfer',
+            'amount': amount,
+            'currency_code': recipientAccount.currencyCode,
+            'direction': 'inflow',
+            'type': 'transfer',
+            'status': 'completed',
+            'date': DateTime.now().toIso8601String(),
+            'reference': 'NM-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
+            'note': note,
+          });
+        }
+      } catch (_) {
+        // Non-blocking if recipient is external
+      }
 
       return Account(
         id: source.id,
@@ -277,14 +350,16 @@ class SupabaseCardRepository implements CardRepository {
   @override
   Future<List<BankCard>> fetchCards() async {
     try {
-      final response = await _client.from('cards').select();
+      final user = _client.auth.currentUser;
+      final userId = user?.id ?? MockSeed.customerId;
+      final response =
+          await _client.from('cards').select().eq('user_id', userId);
       final list = (response as List)
           .map((item) => SupabaseMappers.cardFromMap(item as Map<String, dynamic>))
           .toList();
-      if (list.isEmpty) return MockSeed.cards;
       return list;
-    } catch (_) {
-      return MockSeed.cards;
+    } catch (e) {
+      throw RepositoryFailure('Could not load cards from Supabase: $e');
     }
   }
 
@@ -296,15 +371,43 @@ class SupabaseCardRepository implements CardRepository {
       if (response != null) {
         return SupabaseMappers.cardFromMap(response);
       }
-      return MockSeed.cards.firstWhere(
-        (c) => c.id == id,
-        orElse: () => MockSeed.cards.first,
+      throw const RepositoryFailure('That card is no longer available.');
+    } catch (e) {
+      if (e is RepositoryFailure) rethrow;
+      throw RepositoryFailure('Could not fetch card: $e');
+    }
+  }
+
+  @override
+  Future<BankCard> toggleCardFreeze(String cardId) async {
+    try {
+      final card = await fetchCard(cardId);
+      final newStatus =
+          card.status == CardStatus.active ? 'frozen' : 'active';
+      await _client
+          .from('cards')
+          .update({'status': newStatus}).eq('id', cardId);
+      return card.copyWith(
+        status:
+            newStatus == 'frozen' ? CardStatus.frozen : CardStatus.active,
       );
-    } catch (_) {
-      return MockSeed.cards.firstWhere(
-        (c) => c.id == id,
-        orElse: () => MockSeed.cards.first,
-      );
+    } catch (e) {
+      if (e is RepositoryFailure) rethrow;
+      throw RepositoryFailure('Could not toggle card freeze status: $e');
+    }
+  }
+
+  @override
+  Future<BankCard> updateSpendingLimit(String cardId, double limit) async {
+    try {
+      final card = await fetchCard(cardId);
+      await _client
+          .from('cards')
+          .update({'spending_limit': limit}).eq('id', cardId);
+      return card.copyWith(spendingLimit: limit);
+    } catch (e) {
+      if (e is RepositoryFailure) rethrow;
+      throw RepositoryFailure('Could not update spending limit: $e');
     }
   }
 }
@@ -318,18 +421,21 @@ class SupabaseTransactionRepository implements TransactionRepository {
   @override
   Future<List<Txn>> fetchTransactions({String? accountId}) async {
     try {
+      final user = _client.auth.currentUser;
+      final userId = user?.id ?? MockSeed.customerId;
       var query = _client.from('transactions').select();
       if (accountId != null) {
         query = query.eq('account_id', accountId);
+      } else {
+        query = query.eq('user_id', userId);
       }
       final response = await query.order('date', ascending: false);
       final list = (response as List)
           .map((item) => SupabaseMappers.transactionFromMap(item as Map<String, dynamic>))
           .toList();
-      if (list.isEmpty) return MockSeed.transactions();
       return list;
-    } catch (_) {
-      return MockSeed.transactions();
+    } catch (e) {
+      throw RepositoryFailure('Could not load transactions from Supabase: $e');
     }
   }
 
@@ -341,15 +447,10 @@ class SupabaseTransactionRepository implements TransactionRepository {
       if (response != null) {
         return SupabaseMappers.transactionFromMap(response);
       }
-      return MockSeed.transactions().firstWhere(
-        (t) => t.id == id,
-        orElse: () => MockSeed.transactions().first,
-      );
-    } catch (_) {
-      return MockSeed.transactions().firstWhere(
-        (t) => t.id == id,
-        orElse: () => MockSeed.transactions().first,
-      );
+      throw const RepositoryFailure('That transaction is no longer available.');
+    } catch (e) {
+      if (e is RepositoryFailure) rethrow;
+      throw RepositoryFailure('Could not fetch transaction: $e');
     }
   }
 }
@@ -367,10 +468,9 @@ class SupabasePromoRepository implements PromoRepository {
       final list = (response as List)
           .map((item) => SupabaseMappers.promoFromMap(item as Map<String, dynamic>))
           .toList();
-      if (list.isEmpty) return MockSeed.promos;
       return list;
-    } catch (_) {
-      return MockSeed.promos;
+    } catch (e) {
+      throw RepositoryFailure('Could not load promos from Supabase: $e');
     }
   }
 }
@@ -386,7 +486,6 @@ class SupabaseProfileRepository implements ProfileRepository {
     try {
       final user = _client.auth.currentUser;
       if (user != null) {
-        // 1. Match by Supabase auth UUID
         final profileById = await _client
             .from('profiles')
             .select()
@@ -395,38 +494,36 @@ class SupabaseProfileRepository implements ProfileRepository {
         if (profileById != null) {
           return SupabaseMappers.profileFromMap(profileById);
         }
-
-        // 2. Match by email
-        if (user.email != null && user.email!.isNotEmpty) {
-          final profileByEmail = await _client
-              .from('profiles')
-              .select()
-              .eq('email', user.email!)
-              .maybeSingle();
-          if (profileByEmail != null) {
-            return SupabaseMappers.profileFromMap(profileByEmail);
-          }
-        }
       }
 
-      // 3. Fallback to first profile in table if any
       final firstProfile =
           await _client.from('profiles').select().limit(1).maybeSingle();
       if (firstProfile != null) {
         return SupabaseMappers.profileFromMap(firstProfile);
       }
 
-      // 4. Default fallback profile
       return MockSeed.profile;
-    } catch (_) {
+    } catch (e) {
       return MockSeed.profile;
     }
   }
-}
 
-// ---------------------------------------------------------------------------
-// Savings Goal Mappers
-// ---------------------------------------------------------------------------
+  @override
+  Future<UserProfile> updateProfile(UserProfile profile) async {
+    try {
+      await _client.from('profiles').upsert({
+        'id': profile.id,
+        'full_name': profile.fullName,
+        'email': profile.email,
+        'mobile': profile.mobile,
+        'member_since': profile.memberSince.toIso8601String(),
+      });
+      return profile;
+    } catch (e) {
+      throw RepositoryFailure('Could not update profile: $e');
+    }
+  }
+}
 
 extension _GoalSaveMappers on SupabaseMappers {
   static GoalSave goalFromMap(Map<String, dynamic> map) {
@@ -471,21 +568,65 @@ class SupabaseSavingsGoalRepository implements SavingsGoalRepository {
 
   final SupabaseClient _client;
 
+  Future<void> _adjustAccountBalance({
+    required String accountId,
+    required double amountChange,
+    required String note,
+    required String direction,
+  }) async {
+    try {
+      final response = await _client
+          .from('accounts')
+          .select()
+          .eq('id', accountId)
+          .maybeSingle();
+      if (response != null) {
+        final currentAvail = (response['available_balance'] as num).toDouble();
+        final currentTotal = (response['total_balance'] as num).toDouble();
+        final newAvail = (currentAvail + amountChange).clamp(0.0, double.infinity);
+        final newTotal = (currentTotal + amountChange).clamp(0.0, double.infinity);
+
+        await _client.from('accounts').update({
+          'available_balance': newAvail,
+          'total_balance': newTotal,
+        }).eq('id', accountId);
+
+        await _client.from('transactions').insert({
+          'id': 'txn_${DateTime.now().millisecondsSinceEpoch}',
+          'user_id': _client.auth.currentUser?.id,
+          'account_id': accountId,
+          'merchant': 'Savings Goal',
+          'category': 'Savings',
+          'amount': amountChange.abs(),
+          'currency_code': response['currency_code'] ?? 'USD',
+          'direction': direction,
+          'type': 'transfer',
+          'status': 'completed',
+          'date': DateTime.now().toIso8601String(),
+          'reference': 'NM-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
+          'note': note,
+        });
+      }
+    } catch (_) {}
+  }
+
   @override
   Future<List<GoalSave>> fetchGoals() async {
     try {
+      final user = _client.auth.currentUser;
+      final userId = user?.id ?? MockSeed.customerId;
       final response = await _client
           .from('goal_saves')
           .select()
+          .eq('user_id', userId)
           .order('created_at', ascending: false);
       final list = (response as List)
           .map((item) =>
               _GoalSaveMappers.goalFromMap(item as Map<String, dynamic>))
           .toList();
-      if (list.isEmpty) return MockSeed.goalSaves();
       return list;
-    } catch (_) {
-      return MockSeed.goalSaves();
+    } catch (e) {
+      throw RepositoryFailure('Could not load savings goals from Supabase: $e');
     }
   }
 
@@ -500,15 +641,10 @@ class SupabaseSavingsGoalRepository implements SavingsGoalRepository {
       if (response != null) {
         return _GoalSaveMappers.goalFromMap(response);
       }
-      return MockSeed.goalSaves().firstWhere(
-        (g) => g.id == id,
-        orElse: () => MockSeed.goalSaves().first,
-      );
-    } catch (_) {
-      return MockSeed.goalSaves().firstWhere(
-        (g) => g.id == id,
-        orElse: () => MockSeed.goalSaves().first,
-      );
+      throw const RepositoryFailure('That goal is no longer available.');
+    } catch (e) {
+      if (e is RepositoryFailure) rethrow;
+      throw RepositoryFailure('Could not fetch goal: $e');
     }
   }
 
@@ -523,6 +659,7 @@ class SupabaseSavingsGoalRepository implements SavingsGoalRepository {
     final now = DateTime.now();
     final goalMap = {
       'id': id,
+      'user_id': _client.auth.currentUser?.id,
       'name': name,
       'emoji': emoji,
       'target_amount': targetAmount,
@@ -539,6 +676,7 @@ class SupabaseSavingsGoalRepository implements SavingsGoalRepository {
       if (initialDeposit > 0) {
         await _client.from('goal_transactions').insert({
           'id': 'gtxn_${now.millisecondsSinceEpoch}',
+          'user_id': _client.auth.currentUser?.id,
           'goal_id': id,
           'kind': 'transferIn',
           'amount': initialDeposit,
@@ -546,6 +684,12 @@ class SupabaseSavingsGoalRepository implements SavingsGoalRepository {
           'date': now.toIso8601String(),
           'note': 'Opening deposit',
         });
+        await _adjustAccountBalance(
+          accountId: 'acc_wallet',
+          amountChange: -initialDeposit,
+          note: 'Opening deposit for goal: $name',
+          direction: 'outflow',
+        );
       }
       return _GoalSaveMappers.goalFromMap(goalMap);
     } catch (e) {
@@ -568,6 +712,7 @@ class SupabaseSavingsGoalRepository implements SavingsGoalRepository {
 
       await _client.from('goal_transactions').insert({
         'id': 'gtxn_${DateTime.now().millisecondsSinceEpoch}',
+        'user_id': _client.auth.currentUser?.id,
         'goal_id': goalId,
         'kind': 'transferIn',
         'amount': amount,
@@ -575,6 +720,13 @@ class SupabaseSavingsGoalRepository implements SavingsGoalRepository {
         'date': DateTime.now().toIso8601String(),
         'note': null,
       });
+
+      await _adjustAccountBalance(
+        accountId: 'acc_wallet',
+        amountChange: -amount,
+        note: 'Saved into ${current.name}',
+        direction: 'outflow',
+      );
 
       return current.copyWith(balance: newBalance);
     } catch (e) {
@@ -601,6 +753,7 @@ class SupabaseSavingsGoalRepository implements SavingsGoalRepository {
 
       await _client.from('goal_transactions').insert({
         'id': 'gtxn_${DateTime.now().millisecondsSinceEpoch}',
+        'user_id': _client.auth.currentUser?.id,
         'goal_id': goalId,
         'kind': 'transferOut',
         'amount': amount,
@@ -608,6 +761,13 @@ class SupabaseSavingsGoalRepository implements SavingsGoalRepository {
         'date': DateTime.now().toIso8601String(),
         'note': null,
       });
+
+      await _adjustAccountBalance(
+        accountId: 'acc_wallet',
+        amountChange: amount,
+        note: 'Withdrawn from ${current.name}',
+        direction: 'inflow',
+      );
 
       return current.copyWith(balance: newBalance);
     } catch (e) {
@@ -624,6 +784,15 @@ class SupabaseSavingsGoalRepository implements SavingsGoalRepository {
         'status': 'closed',
         'balance': 0.0,
       }).eq('id', id);
+
+      if (current.balance > 0) {
+        await _adjustAccountBalance(
+          accountId: 'acc_wallet',
+          amountChange: current.balance,
+          note: 'Goal closed — funds returned (${current.name})',
+          direction: 'inflow',
+        );
+      }
 
       return current.copyWith(
         status: GoalSaveStatus.closed,
@@ -647,16 +816,207 @@ class SupabaseSavingsGoalRepository implements SavingsGoalRepository {
           .map((item) =>
               _GoalSaveMappers.goalTxnFromMap(item as Map<String, dynamic>))
           .toList();
-      if (list.isEmpty) {
-        return MockSeed.goalTransactions()
-            .where((t) => t.goalId == goalId)
-            .toList();
-      }
       return list;
-    } catch (_) {
-      return MockSeed.goalTransactions()
-          .where((t) => t.goalId == goalId)
+    } catch (e) {
+      throw RepositoryFailure('Could not load goal transactions: $e');
+    }
+  }
+}
+
+class SupabaseSplitBillRepository implements SplitBillRepository {
+  SupabaseSplitBillRepository([SupabaseClient? client])
+      : _client = client ?? SupabaseConfig.client;
+
+  final SupabaseClient _client;
+
+  @override
+  Future<List<SplitBill>> fetchSplitBills() async {
+    try {
+      final user = _client.auth.currentUser;
+      final userId = user?.id ?? MockSeed.customerId;
+      final billsRes = await _client
+          .from('split_bills')
+          .select()
+          .eq('user_id', userId)
+          .order('created_at', ascending: false);
+
+      final billsList = billsRes as List;
+      final results = <SplitBill>[];
+
+      for (final item in billsList) {
+        final billMap = item as Map<String, dynamic>;
+        final billId = billMap['id'] as String;
+
+        final partsRes = await _client
+            .from('split_bill_participants')
+            .select()
+            .eq('bill_id', billId);
+
+        final participants = (partsRes as List)
+            .map((p) => SupabaseMappers.splitParticipantFromMap(p as Map<String, dynamic>))
+            .toList();
+
+        results.add(SupabaseMappers.splitBillFromMap(billMap, participants));
+      }
+      return results;
+    } catch (e) {
+      throw RepositoryFailure('Could not fetch split bills from Supabase: $e');
+    }
+  }
+
+  @override
+  Future<SplitBill> fetchSplitBill(String id) async {
+    try {
+      final billRes = await _client
+          .from('split_bills')
+          .select()
+          .eq('id', id)
+          .maybeSingle();
+      if (billRes == null) throw const RepositoryFailure('Bill not found.');
+
+      final partsRes = await _client
+          .from('split_bill_participants')
+          .select()
+          .eq('bill_id', id);
+
+      final participants = (partsRes as List)
+          .map((p) => SupabaseMappers.splitParticipantFromMap(p as Map<String, dynamic>))
           .toList();
+
+      return SupabaseMappers.splitBillFromMap(billRes, participants);
+    } catch (e) {
+      if (e is RepositoryFailure) rethrow;
+      throw RepositoryFailure('Could not fetch split bill: $e');
+    }
+  }
+
+  @override
+  Future<SplitBill> createSplitBill({
+    required String title,
+    required double totalAmount,
+    required String category,
+    required List<String> participantNames,
+  }) async {
+    final now = DateTime.now();
+    final billId = 'bill_${now.millisecondsSinceEpoch}';
+
+    final cleanNames = participantNames
+        .map((name) => name.trim())
+        .where((name) => name.isNotEmpty)
+        .toList();
+
+    final totalPeople = cleanNames.length + 1;
+    final share = (totalAmount / totalPeople);
+
+    final billMap = {
+      'id': billId,
+      'user_id': _client.auth.currentUser?.id,
+      'title': title.trim().isEmpty ? 'Split Bill' : title.trim(),
+      'total_amount': totalAmount,
+      'category': category.trim().isEmpty ? 'General' : category.trim(),
+      'created_at': now.toIso8601String(),
+      'created_by': 'You (Host)',
+    };
+
+    final participants = <SplitBillParticipant>[];
+    final hostPartMap = {
+      'id': 'p_${billId}_host',
+      'bill_id': billId,
+      'name': 'You (Host)',
+      'share_amount': share,
+      'status': 'paid',
+      'paid_at': now.toIso8601String(),
+    };
+    participants.add(SupabaseMappers.splitParticipantFromMap(hostPartMap));
+
+    try {
+      await _client.from('split_bills').insert(billMap);
+      await _client.from('split_bill_participants').insert(hostPartMap);
+
+      for (var i = 0; i < cleanNames.length; i++) {
+        final partMap = {
+          'id': 'p_${billId}_$i',
+          'bill_id': billId,
+          'name': cleanNames[i],
+          'share_amount': share,
+          'status': 'pending',
+          'paid_at': null,
+        };
+        await _client.from('split_bill_participants').insert(partMap);
+        participants.add(SupabaseMappers.splitParticipantFromMap(partMap));
+      }
+
+      return SupabaseMappers.splitBillFromMap(billMap, participants);
+    } catch (e) {
+      throw RepositoryFailure('Could not create split bill in Supabase: $e');
+    }
+  }
+
+  @override
+  Future<bool> confirmPayment({
+    required String billId,
+    required String participantId,
+    String? payingAccountId,
+    String currencyCode = 'USD',
+  }) async {
+    try {
+      final bill = await fetchSplitBill(billId);
+      final pIndex = bill.participants.indexWhere((p) => p.id == participantId);
+      if (pIndex == -1) return false;
+
+      final participant = bill.participants[pIndex];
+      if (participant.isPaid) return true;
+
+      final now = DateTime.now();
+      await _client.from('split_bill_participants').update({
+        'status': 'paid',
+        'paid_at': now.toIso8601String(),
+      }).eq('id', participantId);
+
+      final accountId = payingAccountId ?? 'acc_wallet';
+
+      // Deduct balance from paying account in Supabase
+      final accountRes = await _client
+          .from('accounts')
+          .select()
+          .eq('id', accountId)
+          .maybeSingle();
+
+      if (accountRes != null) {
+        final currentAvail = (accountRes['available_balance'] as num).toDouble();
+        final currentTotal = (accountRes['total_balance'] as num).toDouble();
+        final newAvail = (currentAvail - participant.shareAmount).clamp(0.0, double.infinity);
+        final newTotal = (currentTotal - participant.shareAmount).clamp(0.0, double.infinity);
+
+        await _client.from('accounts').update({
+          'available_balance': newAvail,
+          'total_balance': newTotal,
+        }).eq('id', accountId);
+
+        // Insert transaction log
+        final txnId = 'txn_split_${now.millisecondsSinceEpoch}';
+        final refCode =
+            'SPLIT-${bill.id.substring(0, bill.id.length.clamp(0, 6)).toUpperCase()}';
+        await _client.from('transactions').insert({
+          'id': txnId,
+          'user_id': _client.auth.currentUser?.id,
+          'account_id': accountId,
+          'merchant': 'Split Bill: ${bill.title} (${participant.name})',
+          'category': 'Split Bills',
+          'amount': participant.shareAmount,
+          'currency_code': currencyCode,
+          'direction': 'outflow',
+          'type': 'qrPayment',
+          'status': 'completed',
+          'date': now.toIso8601String(),
+          'reference': refCode,
+          'note': 'Paid share for ${bill.title}',
+        });
+      }
+
+      return true;
+    } catch (e) {
+      throw RepositoryFailure('Could not confirm payment: $e');
     }
   }
 }
@@ -705,23 +1065,13 @@ class SupabaseAuthRepository implements AuthRepository {
           return SupabaseMappers.profileFromMap(profileMap);
         }
       }
-    } catch (_) {
-      // Fallback below to support seeded demo accounts
+    } on AuthException catch (e) {
+      throw RepositoryFailure(e.message);
+    } catch (e) {
+      throw RepositoryFailure('Sign in failed: $e');
     }
 
-    try {
-      final profileMap = await _client
-          .from('profiles')
-          .select()
-          .eq('email', email)
-          .maybeSingle();
-      if (profileMap != null) {
-        return SupabaseMappers.profileFromMap(profileMap);
-      }
-      return MockSeed.profile;
-    } catch (e) {
-      return MockSeed.profile;
-    }
+    throw const RepositoryFailure('Invalid credentials.');
   }
 
   @override
@@ -751,13 +1101,13 @@ class SupabaseAuthRepository implements AuthRepository {
 
       await _client.from('profiles').upsert(profileMap);
 
-      // Create an initial Everyday Wallet for newly registered user if no accounts exist
       try {
         final existingAccounts =
             await _client.from('accounts').select().limit(1);
         if ((existingAccounts as List).isEmpty) {
           final defaultWallet = {
             'id': 'acc_wallet_$userId',
+            'user_id': userId,
             'name': 'Everyday Wallet',
             'short_code': 'WALLET',
             'kind': 'wallet',
@@ -769,9 +1119,7 @@ class SupabaseAuthRepository implements AuthRepository {
           };
           await _client.from('accounts').insert(defaultWallet);
         }
-      } catch (_) {
-        // Safe fallback if table creation or insertion throws
-      }
+      } catch (_) {}
 
       return SupabaseMappers.profileFromMap(profileMap);
     } on AuthException catch (e) {

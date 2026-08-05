@@ -84,7 +84,7 @@ class _CardsScreenState extends ConsumerState<CardsScreen> {
   }
 }
 
-class _Deck extends StatelessWidget {
+class _Deck extends ConsumerWidget {
   const _Deck({
     required this.cards,
     required this.index,
@@ -96,7 +96,7 @@ class _Deck extends StatelessWidget {
   final ValueChanged<int> onPageChanged;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final tokens = context.tokens;
     final card = cards[index];
 
@@ -186,7 +186,32 @@ class _Deck extends StatelessWidget {
                         label: card.status == CardStatus.frozen
                             ? 'Unfreeze'
                             : 'Freeze',
-                        onTap: () => context.push('/soon/freeze-card'),
+                        onTap: () async {
+                          try {
+                            final updated = await ref
+                                .read(cardRepositoryProvider)
+                                .toggleCardFreeze(card.id);
+                            ref.invalidate(cardsProvider);
+                            ref.invalidate(cardProvider(card.id));
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    updated.status == CardStatus.frozen
+                                        ? '${card.label} is now frozen.'
+                                        : '${card.label} is now active.',
+                                  ),
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Failed to update card: $e')),
+                              );
+                            }
+                          }
+                        },
                       ),
                     ),
                   ),

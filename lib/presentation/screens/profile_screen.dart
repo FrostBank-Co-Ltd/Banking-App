@@ -96,7 +96,9 @@ class ProfileScreen extends ConsumerWidget {
             ),
             const SizedBox(height: Space.x6),
             OutlinedButton.icon(
-              onPressed: () => context.push('/soon/edit-profile'),
+              onPressed: profile.value == null
+                  ? null
+                  : () => _showEditProfileModal(context, ref, profile.value!),
               icon: const Icon(Icons.edit_rounded, size: 18),
               label: const Text('Edit details'),
             ),
@@ -389,4 +391,75 @@ class _ThemeRow extends ConsumerWidget {
       ),
     );
   }
+}
+
+void _showEditProfileModal(
+  BuildContext context,
+  WidgetRef ref,
+  UserProfile profile,
+) {
+  final nameCtrl = TextEditingController(text: profile.fullName);
+  final emailCtrl = TextEditingController(text: profile.email);
+  final mobileCtrl = TextEditingController(text: profile.mobile);
+
+  showDialog<void>(
+    context: context,
+    builder: (dialogCtx) => AlertDialog(
+      title: const Text('Edit Profile'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: nameCtrl,
+            decoration: const InputDecoration(labelText: 'Full Name'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: emailCtrl,
+            decoration: const InputDecoration(labelText: 'Email'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: mobileCtrl,
+            decoration: const InputDecoration(labelText: 'Mobile'),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogCtx).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () async {
+            final updated = UserProfile(
+              id: profile.id,
+              fullName: nameCtrl.text.trim(),
+              email: emailCtrl.text.trim(),
+              mobile: mobileCtrl.text.trim(),
+              memberSince: profile.memberSince,
+            );
+
+            try {
+              await ref.read(profileRepositoryProvider).updateProfile(updated);
+              ref.invalidate(profileProvider);
+              if (dialogCtx.mounted) Navigator.of(dialogCtx).pop();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Profile updated successfully!')),
+                );
+              }
+            } catch (e) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Could not update profile: $e')),
+                );
+              }
+            }
+          },
+          child: const Text('Save'),
+        ),
+      ],
+    ),
+  );
 }

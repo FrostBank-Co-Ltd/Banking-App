@@ -428,9 +428,10 @@ class _PaymentConfirmationSheetState
             child: FilledButton.icon(
               onPressed: _isProcessing
                   ? null
-                  : () {
+                  : () async {
                       setState(() => _isProcessing = true);
-                      final success = ref
+                      final messenger = ScaffoldMessenger.of(context);
+                      final success = await ref
                           .read(splitBillsProvider.notifier)
                           .confirmPayment(
                             billId: widget.billId,
@@ -440,7 +441,7 @@ class _PaymentConfirmationSheetState
                           );
 
                       if (success) {
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        messenger.showSnackBar(
                           SnackBar(
                             content: Text(
                               'Payment of ${currency.symbol}${widget.amount.toStringAsFixed(2)} for ${widget.billTitle} completed successfully!',
@@ -449,8 +450,8 @@ class _PaymentConfirmationSheetState
                         );
                         widget.onSuccess();
                       } else {
-                        setState(() => _isProcessing = false);
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        if (mounted) setState(() => _isProcessing = false);
+                        messenger.showSnackBar(
                           const SnackBar(content: Text('Payment failed. Please try again.')),
                         );
                       }

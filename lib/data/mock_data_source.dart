@@ -209,6 +209,71 @@ class MockDataSource {
     return match;
   });
 
+  Future<BankCard> toggleCardFreeze(String cardId) async {
+    return read('cards', () {
+      final index = _cards.indexWhere((c) => c.id == cardId);
+      if (index == -1) {
+        throw const RepositoryFailure('Card not found.');
+      }
+      final old = _cards[index];
+      final newStatus = old.status == CardStatus.active
+          ? CardStatus.frozen
+          : CardStatus.active;
+      final updated = BankCard(
+        id: old.id,
+        accountId: old.accountId,
+        label: old.label,
+        holderName: old.holderName,
+        number: old.number,
+        cvc: old.cvc,
+        expiry: old.expiry,
+        network: old.network,
+        kind: old.kind,
+        status: newStatus,
+        balance: old.balance,
+        currencyCode: old.currencyCode,
+        spendingLimit: old.spendingLimit,
+      );
+      _cards[index] = updated;
+      return updated;
+    });
+  }
+
+  Future<BankCard> updateSpendingLimit(String cardId, double limit) async {
+    return read('cards', () {
+      final index = _cards.indexWhere((c) => c.id == cardId);
+      if (index == -1) {
+        throw const RepositoryFailure('Card not found.');
+      }
+      final old = _cards[index];
+      final updated = BankCard(
+        id: old.id,
+        accountId: old.accountId,
+        label: old.label,
+        holderName: old.holderName,
+        number: old.number,
+        cvc: old.cvc,
+        expiry: old.expiry,
+        network: old.network,
+        kind: old.kind,
+        status: old.status,
+        balance: old.balance,
+        currencyCode: old.currencyCode,
+        spendingLimit: limit,
+      );
+      _cards[index] = updated;
+      return updated;
+    });
+  }
+
+  Future<UserProfile> updateProfile(UserProfile newProfile) async {
+    return read('profile', () {
+      _profile = newProfile;
+      if (_session != null) _session = newProfile;
+      return _profile;
+    });
+  }
+
   Future<List<Txn>> transactions({String? accountId}) =>
       read('transactions', () {
         final rows = accountId == null
@@ -264,12 +329,104 @@ class MockDataSource {
     return _session;
   }
 
-  /// Demo sign in. This build presents the interface, so any entry opens the
-  /// seeded profile and nothing is validated or checked.
+  /// Demo sign in with strict password and credential validation.
   Future<UserProfile> signIn(String email, String password) async {
     await Future<void>.delayed(_latency());
-    _session = _profile;
-    return _profile;
+
+    if (password.trim().length < 8) {
+      throw const RepositoryFailure(
+        'Password must be at least 8 characters long.',
+      );
+    }
+
+    final cleanEmail = email.trim().toLowerCase();
+
+    // Map of seeded profiles and their valid passwords
+    final credentialsMap = <String, ({String password, UserProfile profile})>{
+      'ava.mercado@frostbank.app': (
+        password: 'frost2026',
+        profile: MockSeed.profile,
+      ),
+      'yujin.an@frostbank.app': (
+        password: 'ive2026',
+        profile: UserProfile(
+          id: '00000000-0000-0000-0000-000000000002',
+          fullName: 'An Yujin',
+          email: 'yujin.an@frostbank.app',
+          mobile: '+82 10-1001-0901',
+          memberSince: DateTime(2021, 12, 1),
+        ),
+      ),
+      'wonyoung.jang@frostbank.app': (
+        password: 'ive2026',
+        profile: UserProfile(
+          id: '00000000-0000-0000-0000-000000000003',
+          fullName: 'Jang Wonyoung',
+          email: 'wonyoung.jang@frostbank.app',
+          mobile: '+82 10-2002-0831',
+          memberSince: DateTime(2021, 12, 1),
+        ),
+      ),
+      'gaeul.kim@frostbank.app': (
+        password: 'ive2026',
+        profile: UserProfile(
+          id: '00000000-0000-0000-0000-000000000004',
+          fullName: 'Gaeul (Kim Gaeul)',
+          email: 'gaeul.kim@frostbank.app',
+          mobile: '+82 10-3003-0924',
+          memberSince: DateTime(2021, 12, 1),
+        ),
+      ),
+      'rei.naoi@frostbank.app': (
+        password: 'ive2026',
+        profile: UserProfile(
+          id: '00000000-0000-0000-0000-000000000005',
+          fullName: 'Rei (Naoi Rei)',
+          email: 'rei.naoi@frostbank.app',
+          mobile: '+82 10-4004-0203',
+          memberSince: DateTime(2021, 12, 1),
+        ),
+      ),
+      'liz.kim@frostbank.app': (
+        password: 'ive2026',
+        profile: UserProfile(
+          id: '00000000-0000-0000-0000-000000000006',
+          fullName: 'Liz (Kim Jiwon)',
+          email: 'liz.kim@frostbank.app',
+          mobile: '+82 10-5005-1121',
+          memberSince: DateTime(2021, 12, 1),
+        ),
+      ),
+      'hyunseo.lee@frostbank.app': (
+        password: 'ive2026',
+        profile: UserProfile(
+          id: '00000000-0000-0000-0000-000000000007',
+          fullName: 'Leeseo (Lee Hyunseo)',
+          email: 'hyunseo.lee@frostbank.app',
+          mobile: '+82 10-6006-0221',
+          memberSince: DateTime(2021, 12, 1),
+        ),
+      ),
+    };
+
+    final match = credentialsMap[cleanEmail];
+    if (match != null) {
+      if (password != match.password) {
+        throw const RepositoryFailure('Incorrect password. Please try again.');
+      }
+      _profile = match.profile;
+      _session = match.profile;
+      return match.profile;
+    }
+
+    if (_profile.email.toLowerCase() == cleanEmail) {
+      _session = _profile;
+      return _profile;
+    }
+
+    throw const RepositoryFailure(
+      'Invalid email or password. Account not found.',
+    );
   }
 
   /// Demo sign up. Takes the entered name and email into the seeded profile so

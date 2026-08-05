@@ -6,7 +6,7 @@ import '../domain/models.dart';
 /// data. Account and card digits are format valid but belong to no real
 /// institution or scheme holder.
 abstract final class MockSeed {
-  static const String customerId = 'usr_01';
+  static const String customerId = '00000000-0000-0000-0000-000000000001';
 
   /// Mock data: the signed in customer.
   static final UserProfile profile = UserProfile(

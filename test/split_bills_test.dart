@@ -18,10 +18,10 @@ void main() {
       container.dispose();
     });
 
-    test('creates a split bill and calculates equal shares correctly', () {
+    test('creates a split bill and calculates equal shares correctly', () async {
       final controller = container.read(splitBillsProvider.notifier);
 
-      controller.createBill(
+      await controller.createBill(
         title: 'Friday Dinner',
         totalAmount: 120.00,
         category: 'Food & Dining',
@@ -47,7 +47,7 @@ void main() {
 
       final pendingParticipant = bill.participants.firstWhere((p) => !p.isPaid);
 
-      final success = controller.confirmPayment(
+      final success = await controller.confirmPayment(
         billId: bill.id,
         participantId: pendingParticipant.id,
         payingAccountId: 'acc_wallet',

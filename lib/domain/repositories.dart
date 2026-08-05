@@ -3,6 +3,7 @@
 library;
 
 import 'models.dart';
+import 'split_bill_model.dart';
 
 /// Domain level failure surfaced to the presentation layer.
 class RepositoryFailure implements Exception {
@@ -38,6 +39,12 @@ abstract interface class CardRepository {
   Future<List<BankCard>> fetchCards();
 
   Future<BankCard> fetchCard(String id);
+
+  /// Toggle card status between active and frozen.
+  Future<BankCard> toggleCardFreeze(String cardId);
+
+  /// Update daily spending limit.
+  Future<BankCard> updateSpendingLimit(String cardId, double limit);
 }
 
 abstract interface class TransactionRepository {
@@ -64,6 +71,8 @@ abstract interface class MarketRepository {
 
 abstract interface class ProfileRepository {
   Future<UserProfile> fetchProfile();
+
+  Future<UserProfile> updateProfile(UserProfile profile);
 }
 
 abstract interface class SavingsGoalRepository {
@@ -94,6 +103,26 @@ abstract interface class SavingsGoalRepository {
 
   /// Transaction ledger for one goal, newest first.
   Future<List<GoalTxn>> fetchGoalTransactions(String goalId);
+}
+
+abstract interface class SplitBillRepository {
+  Future<List<SplitBill>> fetchSplitBills();
+
+  Future<SplitBill> fetchSplitBill(String id);
+
+  Future<SplitBill> createSplitBill({
+    required String title,
+    required double totalAmount,
+    required String category,
+    required List<String> participantNames,
+  });
+
+  Future<bool> confirmPayment({
+    required String billId,
+    required String participantId,
+    String? payingAccountId,
+    String currencyCode = 'USD',
+  });
 }
 
 abstract interface class AuthRepository {
