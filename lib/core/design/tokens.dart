@@ -38,6 +38,40 @@ abstract final class Palette {
   static const Color interactiveSecondary = Color(0xFFEEF0FF);
   static const Color disabled = Color(0xFFE2E8F0);
 
+  // Payment card face. A single vertical fall from ice to ink, so the brand
+  // mark sits on the dark half and the frozen top edge carries the colour.
+  // These are face-only values and never appear in the interface chrome.
+  static const Color cardIce = Color(0xFFA9D0E7);
+  static const Color cardSky = Color(0xFF6DB4DD);
+  static const Color cardAzure = Color(0xFF1C9FDB);
+  static const Color cardOcean = Color(0xFF0B6DB1);
+  static const Color cardDeep = Color(0xFF0A2C50);
+  static const Color cardNight = Color(0xFF070E1C);
+  static const Color cardVoid = Color(0xFF04060B);
+
+  /// Top to bottom fall of the card face.
+  static const List<Color> gradientCardFace = [
+    cardIce,
+    cardSky,
+    cardAzure,
+    cardOcean,
+    cardDeep,
+    cardNight,
+    cardVoid,
+  ];
+
+  /// Stops for [gradientCardFace]. Front loaded, so colour lives in the top
+  /// third and the mark reads white against near black below it.
+  static const List<double> cardFaceStops = [
+    0,
+    0.08,
+    0.2,
+    0.29,
+    0.41,
+    0.58,
+    1,
+  ];
+
   // FrostBank brand surface, transcribed from the brand mark artwork. These
   // build the layered backdrop that the logo and every brand surface share.
   static const Color frostBaseTop = Color(0xFF0A0D2C);

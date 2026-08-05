@@ -72,6 +72,7 @@ abstract final class MockSeed {
       cvc: '678',
       expiry: '09/29',
       network: CardNetwork.visa,
+      kind: CardKind.credit,
       status: CardStatus.active,
       balance: 12106.20, // mock data
       currencyCode: 'USD',
@@ -86,6 +87,7 @@ abstract final class MockSeed {
       cvc: '412',
       expiry: '02/28',
       network: CardNetwork.mastercard,
+      kind: CardKind.debit,
       status: CardStatus.frozen,
       balance: 1875.40, // mock data
       currencyCode: 'USD',

@@ -59,6 +59,17 @@ extension CardStatusLabel on CardStatus {
   };
 }
 
+/// How the card settles. Printed on the card face, the way a real card carries
+/// its scheme product name.
+enum CardKind { debit, credit }
+
+extension CardKindLabel on CardKind {
+  String get label => switch (this) {
+    CardKind.debit => 'Debit',
+    CardKind.credit => 'Credit',
+  };
+}
+
 class BankCard {
   const BankCard({
     required this.id,
@@ -69,6 +80,7 @@ class BankCard {
     required this.cvc,
     required this.expiry,
     required this.network,
+    required this.kind,
     required this.status,
     required this.balance,
     required this.currencyCode,
@@ -88,6 +100,7 @@ class BankCard {
   final String cvc;
   final String expiry;
   final CardNetwork network;
+  final CardKind kind;
   final CardStatus status;
   final double balance;
   final String currencyCode;
