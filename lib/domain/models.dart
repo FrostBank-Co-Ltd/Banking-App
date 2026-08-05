@@ -483,6 +483,133 @@ class Promo {
   final int accentIndex;
 }
 
+// ---------------------------------------------------------------------------
+// Goal Saves
+// ---------------------------------------------------------------------------
+
+enum GoalSaveStatus { active, closed }
+
+extension GoalSaveStatusLabel on GoalSaveStatus {
+  String get label => switch (this) {
+    GoalSaveStatus.active => 'Active',
+    GoalSaveStatus.closed => 'Closed',
+  };
+}
+
+/// A named savings pocket the user opens inside their Savings account.
+///
+/// Interest accrues daily at [dailyRatePercent] on the current [balance].
+class GoalSave {
+  const GoalSave({
+    required this.id,
+    required this.name,
+    required this.emoji,
+    required this.targetAmount,
+    required this.balance,
+    required this.currencyCode,
+    required this.dailyRatePercent,
+    required this.interestEarned,
+    required this.createdAt,
+    required this.status,
+  });
+
+  final String id;
+
+  /// User-defined goal name, e.g. "Europe Trip".
+  final String name;
+
+  /// Single emoji picked when the goal was opened, e.g. "✈️".
+  final String emoji;
+
+  /// Optional savings target. Zero means no explicit target.
+  final double targetAmount;
+
+  final double balance;
+  final String currencyCode;
+
+  /// Daily interest rate as a percentage, e.g. 0.011918 for ~4.35% APY.
+  final double dailyRatePercent;
+
+  /// Cumulative interest credited to this goal since it was opened.
+  final double interestEarned;
+
+  final DateTime createdAt;
+  final GoalSaveStatus status;
+
+  bool get hasTarget => targetAmount > 0;
+
+  /// Progress toward the target. Clamped to [0, 1]. Returns 0 if no target.
+  double get progress =>
+      hasTarget ? (balance / targetAmount).clamp(0.0, 1.0) : 0.0;
+
+  /// Amount that would be earned today based on the current balance.
+  double get dailyInterestAmount => balance * (dailyRatePercent / 100);
+
+  /// Annual Percentage Yield inferred from the daily rate: (1 + d/100)^365 − 1.
+  double get apy =>
+      (1 + dailyRatePercent / 100) * 365 - 1; // simple approximation
+
+  GoalSave copyWith({
+    double? balance,
+    double? interestEarned,
+    GoalSaveStatus? status,
+    String? name,
+    String? emoji,
+    double? targetAmount,
+  }) => GoalSave(
+    id: id,
+    name: name ?? this.name,
+    emoji: emoji ?? this.emoji,
+    targetAmount: targetAmount ?? this.targetAmount,
+    balance: balance ?? this.balance,
+    currencyCode: currencyCode,
+    dailyRatePercent: dailyRatePercent,
+    interestEarned: interestEarned ?? this.interestEarned,
+    createdAt: createdAt,
+    status: status ?? this.status,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Goal Save Transactions
+// ---------------------------------------------------------------------------
+
+enum GoalTxnKind { transferIn, transferOut, interest }
+
+extension GoalTxnKindLabel on GoalTxnKind {
+  String get label => switch (this) {
+    GoalTxnKind.transferIn => 'Added funds',
+    GoalTxnKind.transferOut => 'Withdrawn',
+    GoalTxnKind.interest => 'Interest earned',
+  };
+
+  bool get isCredit =>
+      this == GoalTxnKind.transferIn || this == GoalTxnKind.interest;
+}
+
+/// An entry in a goal save's transaction history.
+class GoalTxn {
+  const GoalTxn({
+    required this.id,
+    required this.goalId,
+    required this.kind,
+    required this.amount,
+    required this.runningBalance,
+    required this.date,
+    this.note,
+  });
+
+  final String id;
+  final String goalId;
+  final GoalTxnKind kind;
+
+  /// Always positive.
+  final double amount;
+  final double runningBalance;
+  final DateTime date;
+  final String? note;
+}
+
 class UserProfile {
   const UserProfile({
     required this.id,
