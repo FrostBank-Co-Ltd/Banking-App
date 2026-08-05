@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/supabase_config.dart';
 import '../data/mock_data_source.dart';
 import '../data/mock_repositories.dart';
+import '../data/supabase_repositories.dart';
 import '../domain/models.dart';
 import '../domain/repositories.dart';
 import 'preferences_controller.dart';
@@ -13,35 +15,72 @@ import 'txn_filter.dart';
 /// belongs to the user here, through the retry control in the error state.
 Duration? noAutomaticRetry(int retryCount, Object error) => null;
 
+/// Controls whether the app uses Supabase or offline Mock repositories.
+final useSupabaseProvider = NotifierProvider<UseSupabaseNotifier, bool>(
+  UseSupabaseNotifier.new,
+);
+
+class UseSupabaseNotifier extends Notifier<bool> {
+  @override
+  bool build() => SupabaseConfig.isInitialized;
+
+  void toggle() => state = !state;
+  void setUseSupabase(bool value) => state = value;
+}
+
 /// Data source and repositories. Override [mockDataSourceProvider] in tests to
 /// seed a different world or to remove latency.
 final mockDataSourceProvider = Provider<MockDataSource>(
   (ref) => MockDataSource(),
 );
 
-final accountRepositoryProvider = Provider<AccountRepository>(
-  (ref) => MockAccountRepository(ref.watch(mockDataSourceProvider)),
-);
+final accountRepositoryProvider = Provider<AccountRepository>((ref) {
+  final useSupabase = ref.watch(useSupabaseProvider);
+  if (useSupabase && SupabaseConfig.isInitialized) {
+    return SupabaseAccountRepository();
+  }
+  return MockAccountRepository(ref.watch(mockDataSourceProvider));
+});
 
-final cardRepositoryProvider = Provider<CardRepository>(
-  (ref) => MockCardRepository(ref.watch(mockDataSourceProvider)),
-);
+final cardRepositoryProvider = Provider<CardRepository>((ref) {
+  final useSupabase = ref.watch(useSupabaseProvider);
+  if (useSupabase && SupabaseConfig.isInitialized) {
+    return SupabaseCardRepository();
+  }
+  return MockCardRepository(ref.watch(mockDataSourceProvider));
+});
 
-final transactionRepositoryProvider = Provider<TransactionRepository>(
-  (ref) => MockTransactionRepository(ref.watch(mockDataSourceProvider)),
-);
+final transactionRepositoryProvider = Provider<TransactionRepository>((ref) {
+  final useSupabase = ref.watch(useSupabaseProvider);
+  if (useSupabase && SupabaseConfig.isInitialized) {
+    return SupabaseTransactionRepository();
+  }
+  return MockTransactionRepository(ref.watch(mockDataSourceProvider));
+});
 
-final promoRepositoryProvider = Provider<PromoRepository>(
-  (ref) => MockPromoRepository(ref.watch(mockDataSourceProvider)),
-);
+final promoRepositoryProvider = Provider<PromoRepository>((ref) {
+  final useSupabase = ref.watch(useSupabaseProvider);
+  if (useSupabase && SupabaseConfig.isInitialized) {
+    return SupabasePromoRepository();
+  }
+  return MockPromoRepository(ref.watch(mockDataSourceProvider));
+});
 
-final profileRepositoryProvider = Provider<ProfileRepository>(
-  (ref) => MockProfileRepository(ref.watch(mockDataSourceProvider)),
-);
+final profileRepositoryProvider = Provider<ProfileRepository>((ref) {
+  final useSupabase = ref.watch(useSupabaseProvider);
+  if (useSupabase && SupabaseConfig.isInitialized) {
+    return SupabaseProfileRepository();
+  }
+  return MockProfileRepository(ref.watch(mockDataSourceProvider));
+});
 
-final authRepositoryProvider = Provider<AuthRepository>(
-  (ref) => MockAuthRepository(ref.watch(mockDataSourceProvider)),
-);
+final authRepositoryProvider = Provider<AuthRepository>((ref) {
+  final useSupabase = ref.watch(useSupabaseProvider);
+  if (useSupabase && SupabaseConfig.isInitialized) {
+    return SupabaseAuthRepository();
+  }
+  return MockAuthRepository(ref.watch(mockDataSourceProvider));
+});
 
 /// Application state.
 final sessionProvider = NotifierProvider<SessionController, SessionState>(
