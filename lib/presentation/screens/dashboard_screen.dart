@@ -17,6 +17,11 @@ import '../widgets/states.dart';
 import '../widgets/surfaces.dart';
 import '../widgets/transaction_list.dart';
 
+// Added imports for basic wealth movement methods:
+//import '../screens/deposit_screen.dart';
+//import '../screens/transfer_screen.dart';
+//import '../screens/qr_screen.dart';
+
 /// Distance every sheet section travels on its entrance.
 const Offset _sectionRise = Offset(0, 22);
 
@@ -486,21 +491,25 @@ class _QuickActions extends StatelessWidget {
     children: staggered(
       const [
         _QuickAction(
+          // DEPOSIT
           icon: Icons.south_west_rounded,
           label: 'DEPOSIT',
-          route: '/soon/deposit',
+          route: '/deposit',
         ),
         _QuickAction(
+          // TRANSFER
           icon: Icons.north_east_rounded,
           label: 'SEND',
-          route: '/soon/send-money',
+          route: '/transfer',
         ),
         _QuickAction(
+          // QR SCANNING
           icon: Icons.qr_code_scanner_rounded,
           label: 'SCAN',
-          route: '/soon/qr-payment',
+          route: '/qr-scanner',
         ),
         _QuickAction(
+          // HISTORY
           icon: Icons.receipt_long_rounded,
           label: 'HISTORY',
           route: '/activity',
