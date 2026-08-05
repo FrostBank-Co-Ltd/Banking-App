@@ -7,6 +7,8 @@ import '../state/session_controller.dart';
 import 'screens/account_detail_screen.dart';
 import 'screens/card_detail_screen.dart';
 import 'screens/cards_screen.dart';
+import 'screens/crypto_detail_screen.dart';
+import 'screens/crypto_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/hub_screen.dart';
 import 'screens/login_screen.dart';
@@ -67,6 +69,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/txn/:id',
         builder: (_, state) =>
             TransactionDetailScreen(txnId: state.pathParameters['id']!),
+      ),
+      GoRoute(path: '/crypto', builder: (_, _) => const CryptoScreen()),
+      GoRoute(
+        path: '/crypto/:code',
+        builder: (_, state) =>
+            CryptoDetailScreen(code: state.pathParameters['code']!),
       ),
       GoRoute(
         path: '/soon/:feature',
