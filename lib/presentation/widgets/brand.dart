@@ -164,6 +164,8 @@ class _FrostGlyphPainter extends CustomPainter {
 /// The layered gradient recipe shared by the mark and every brand surface.
 abstract final class FrostGradients {
   static void paintLayers(Canvas canvas, Rect rect, {double glow = 1}) {
+    if (rect.isEmpty || rect.width <= 0 || rect.height <= 0) return;
+
     final base = Paint()
       ..shader = const LinearGradient(
         begin: Alignment.topCenter,
@@ -173,6 +175,7 @@ abstract final class FrostGradients {
     canvas.drawRect(rect, base);
 
     final reach = math.max(rect.width, rect.height);
+    if (reach <= 0) return;
 
     // Bottom left icy bloom, the signal colour of the brand.
     _radial(
@@ -241,6 +244,7 @@ abstract final class FrostGradients {
     required List<double> stops,
     required List<Color> colors,
   }) {
+    if (radius <= 0 || radius.isNaN || radius.isInfinite) return;
     final paint = Paint()
       ..shader = ui.Gradient.radial(center, radius, colors, stops);
     canvas.drawRect(rect, paint);
@@ -281,6 +285,7 @@ class _BackdropPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (size.isEmpty || size.width <= 0 || size.height <= 0) return;
     FrostGradients.paintLayers(canvas, Offset.zero & size, glow: glow);
   }
 

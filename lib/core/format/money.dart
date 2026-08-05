@@ -13,13 +13,53 @@ abstract final class Money {
 
   static const Map<String, String> _spokenCurrency = {
     'USD': 'US dollars',
+    'EUR': 'Euros',
+    'GBP': 'British pounds',
+    'JPY': 'Japanese yen',
+    'PHP': 'Philippine pesos',
+    'CAD': 'Canadian dollars',
+    'AUD': 'Australian dollars',
     'BTC': 'bitcoin',
     'ETH': 'ether',
     'SOL': 'solana',
   };
 
+  static const Map<String, String> _currencySymbols = {
+    'USD': '\$',
+    'EUR': '€',
+    'GBP': '£',
+    'JPY': '¥',
+    'PHP': '₱',
+    'CAD': 'CA\$',
+    'AUD': 'A\$',
+  };
+
+  static const Map<String, double> exchangeRates = {
+    'USD': 1.0,
+    'EUR': 0.92,
+    'GBP': 0.78,
+    'JPY': 155.0,
+    'PHP': 58.0,
+    'CAD': 1.38,
+    'AUD': 1.52,
+  };
+
+  /// Converts [amount] from [fromCurrency] to [toCurrency] using exchange rates.
+  static double convert(
+    double amount, {
+    String fromCurrency = 'USD',
+    required String toCurrency,
+  }) {
+    if (fromCurrency == toCurrency) return amount;
+    final rateFrom = exchangeRates[fromCurrency];
+    final rateTo = exchangeRates[toCurrency];
+    if (rateFrom == null || rateTo == null) return amount;
+    final baseUsd = amount / rateFrom;
+    return baseUsd * rateTo;
+  }
+
   static String symbolFor(String currencyCode) =>
-      currencyCode == 'USD' ? '\$' : '';
+      _currencySymbols[currencyCode] ?? (currencyCode == 'USD' ? '\$' : '');
 
   /// Visible figure, for example `$12,480.55`.
   static String format(
