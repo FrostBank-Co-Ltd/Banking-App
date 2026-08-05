@@ -18,6 +18,20 @@ abstract interface class AccountRepository {
   Future<List<Account>> fetchAccounts();
 
   Future<Account> fetchAccount(String id);
+
+  /// Deposit funds into an account.
+  Future<Account> deposit({
+    required String accountId,
+    required double amount,
+  });
+
+  /// Transfer funds to a recipient or account.
+  Future<Account> transfer({
+    required String fromAccountId,
+    required String recipient,
+    required double amount,
+    String? note,
+  });
 }
 
 abstract interface class CardRepository {
@@ -92,6 +106,7 @@ abstract interface class AuthRepository {
     required String fullName,
     required String email,
     required String mobile,
+    required String password,
   });
 
   Future<void> signOut();

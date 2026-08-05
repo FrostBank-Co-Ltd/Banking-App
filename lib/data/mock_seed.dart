@@ -13,7 +13,7 @@ abstract final class MockSeed {
     id: customerId,
     fullName: 'Ava Mercado',
     email: 'ava.mercado@frostbank.app',
-    mobile: '+1 (312) 847-1928',
+    mobile: '+63 917 847 1928',
     memberSince: DateTime(2019, 4, 17),
   );
 
@@ -23,7 +23,7 @@ abstract final class MockSeed {
   static const String demoEmail = 'ava.mercado@frostbank.app';
   static const String demoPassword = 'frost2026';
   static const String demoName = 'Ava Mercado';
-  static const String demoMobile = '+1 (312) 847-1928';
+  static const String demoMobile = '+63 917 847 1928';
 
   /// Mock data: three accounts with format valid masked identifiers.
   static final List<Account> accounts = [
@@ -322,7 +322,7 @@ abstract final class MockSeed {
     _Merchant('Cedarline Studios', 'Salary', TxnType.deposit),
     _Merchant('Harborview Rentals', 'Housing', TxnType.transfer),
     _Merchant('Lumen Mobile', 'Utilities', TxnType.qrPayment),
-    _Merchant('Fable & Vine', 'Dining', TxnType.cardPurchase),
+    _Merchant('Fable and Vine', 'Dining', TxnType.cardPurchase),
     _Merchant('Aster Home Supply', 'Home', TxnType.cardPurchase),
   ];
 

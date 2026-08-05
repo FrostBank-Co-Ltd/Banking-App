@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/design/tokens.dart';
 import '../../core/design/typography.dart';
-import '../../data/mock_seed.dart';
 import '../../state/providers.dart';
 import '../widgets/brand.dart';
 import '../widgets/surfaces.dart';
@@ -19,15 +18,12 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  late final TextEditingController _email = TextEditingController(
-    text: MockSeed.demoEmail,
-  );
-  late final TextEditingController _password = TextEditingController(
-    text: MockSeed.demoPassword,
-  );
+  late final TextEditingController _email = TextEditingController();
+  late final TextEditingController _password = TextEditingController();
 
   bool _obscure = true;
   bool _submitting = false;
+  String? _errorMessage;
 
   @override
   void dispose() {
@@ -38,11 +34,34 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _submit() async {
     if (_submitting) return;
-    setState(() => _submitting = true);
-    await ref
-        .read(sessionProvider.notifier)
-        .signIn(email: _email.text, password: _password.text);
-    if (mounted) setState(() => _submitting = false);
+
+    final emailText = _email.text.trim();
+    final passwordText = _password.text;
+
+    if (emailText.isEmpty || passwordText.isEmpty) {
+      setState(() {
+        _errorMessage = 'Please enter your email and password.';
+      });
+      return;
+    }
+
+    setState(() {
+      _submitting = true;
+      _errorMessage = null;
+    });
+    try {
+      await ref
+          .read(sessionProvider.notifier)
+          .signIn(email: emailText, password: passwordText);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString().replaceAll('Exception: ', '');
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 
   @override
@@ -82,6 +101,37 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        if (_errorMessage != null) ...[
+                          Container(
+                            padding: const EdgeInsets.all(Space.x3),
+                            decoration: BoxDecoration(
+                              color: Colors.red.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(AppRadius.md),
+                              border: Border.all(
+                                color: Colors.red.withValues(alpha: 0.5),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.error_outline_rounded,
+                                  color: Colors.redAccent,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: Space.x2),
+                                Expanded(
+                                  child: Text(
+                                    _errorMessage!,
+                                    style: AppType.bodySmall.copyWith(
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: Space.x4),
+                        ],
                         const FrostFieldLabel('Email'),
                         FrostField(
                           controller: _email,

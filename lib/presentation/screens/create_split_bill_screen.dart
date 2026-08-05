@@ -199,7 +199,7 @@ class _CreateSplitBillScreenState extends ConsumerState<CreateSplitBillScreen> {
               ),
               const SizedBox(height: Space.x2),
               DropdownButtonFormField<String>(
-                value: _selectedCategory,
+                initialValue: _selectedCategory,
                 decoration: const InputDecoration(
                   prefixIcon: Icon(Icons.category_rounded),
                 ),

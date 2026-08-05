@@ -400,7 +400,7 @@ class _PaymentConfirmationSheetState
               _selectedAccountId ??= accounts.first.id;
 
               return DropdownButtonFormField<String>(
-                value: _selectedAccountId,
+                initialValue: _selectedAccountId,
                 decoration: const InputDecoration(
                   prefixIcon: Icon(Icons.account_balance_wallet_rounded),
                 ),
@@ -418,7 +418,7 @@ class _PaymentConfirmationSheetState
               );
             },
             loading: () => const CircularProgressIndicator(),
-            error: (_, __) => const Text('Failed to load accounts'),
+            error: (_, _) => const Text('Failed to load accounts'),
           ),
           const SizedBox(height: Space.x8),
 

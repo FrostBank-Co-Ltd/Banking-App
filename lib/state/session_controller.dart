@@ -60,11 +60,13 @@ class SessionController extends Notifier<SessionState> {
     required String fullName,
     required String email,
     required String mobile,
+    required String password,
   }) async {
     final profile = await _auth.signUp(
       fullName: fullName,
       email: email,
       mobile: mobile,
+      password: password,
     );
     state = SessionSignedIn(profile);
   }

@@ -14,6 +14,25 @@ class MockAccountRepository implements AccountRepository {
 
   @override
   Future<Account> fetchAccount(String id) => _source.account(id);
+
+  @override
+  Future<Account> deposit({
+    required String accountId,
+    required double amount,
+  }) => _source.deposit(accountId, amount);
+
+  @override
+  Future<Account> transfer({
+    required String fromAccountId,
+    required String recipient,
+    required double amount,
+    String? note,
+  }) => _source.transfer(
+        fromAccountId: fromAccountId,
+        recipient: recipient,
+        amount: amount,
+        note: note,
+      );
 }
 
 class MockCardRepository implements CardRepository {
@@ -122,7 +141,13 @@ class MockAuthRepository implements AuthRepository {
     required String fullName,
     required String email,
     required String mobile,
-  }) => _source.signUp(fullName: fullName, email: email, mobile: mobile);
+    required String password,
+  }) => _source.signUp(
+        fullName: fullName,
+        email: email,
+        mobile: mobile,
+        password: password,
+      );
 
   @override
   Future<void> signOut() => _source.signOut();

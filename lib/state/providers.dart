@@ -79,9 +79,13 @@ final profileRepositoryProvider = Provider<ProfileRepository>((ref) {
   return MockProfileRepository(ref.watch(mockDataSourceProvider));
 });
 
-final authRepositoryProvider = Provider<AuthRepository>(
-  (ref) => MockAuthRepository(ref.watch(mockDataSourceProvider)),
-);
+final authRepositoryProvider = Provider<AuthRepository>((ref) {
+  final useSupabase = ref.watch(useSupabaseProvider);
+  if (useSupabase && SupabaseConfig.isInitialized) {
+    return SupabaseAuthRepository();
+  }
+  return MockAuthRepository(ref.watch(mockDataSourceProvider));
+});
 
 /// The one outbound HTTP client. Override in tests with a mock client so no test
 /// ever touches the network.
@@ -310,9 +314,13 @@ final monthFlowProvider = FutureProvider.family<MonthFlow, String>(
 // Savings Goals
 // ---------------------------------------------------------------------------
 
-final savingsGoalRepositoryProvider = Provider<SavingsGoalRepository>(
-  (ref) => MockSavingsGoalRepository(ref.watch(mockDataSourceProvider)),
-);
+final savingsGoalRepositoryProvider = Provider<SavingsGoalRepository>((ref) {
+  final useSupabase = ref.watch(useSupabaseProvider);
+  if (useSupabase && SupabaseConfig.isInitialized) {
+    return SupabaseSavingsGoalRepository();
+  }
+  return MockSavingsGoalRepository(ref.watch(mockDataSourceProvider));
+});
 
 final goalsProvider = FutureProvider<List<GoalSave>>(
   (ref) => ref.read(savingsGoalRepositoryProvider).fetchGoals(),

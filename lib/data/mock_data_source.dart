@@ -66,6 +66,138 @@ class MockDataSource {
     return match;
   });
 
+  Future<Account> deposit(String accountId, double amount) async {
+    return read('accounts', () {
+      final index = _accounts.indexWhere((acc) => acc.id == accountId);
+      if (index == -1) {
+        throw const RepositoryFailure('Account not found.');
+      }
+      final old = _accounts[index];
+      final newTotal = old.totalBalance + amount;
+      final newAvail = old.availableBalance + amount;
+      final updated = Account(
+        id: old.id,
+        name: old.name,
+        shortCode: old.shortCode,
+        kind: old.kind,
+        maskedNumber: old.maskedNumber,
+        currencyCode: old.currencyCode,
+        totalBalance: newTotal,
+        availableBalance: newAvail,
+        cryptoQuantity: old.cryptoQuantity,
+        cryptoUnit: old.cryptoUnit,
+      );
+      _accounts[index] = updated;
+
+      final txn = Txn(
+        id: 'txn_${DateTime.now().millisecondsSinceEpoch}',
+        accountId: accountId,
+        merchant: 'Deposit',
+        category: 'Deposit',
+        amount: amount,
+        currencyCode: old.currencyCode,
+        direction: TxnDirection.inflow,
+        type: TxnType.deposit,
+        status: TxnStatus.completed,
+        date: DateTime.now(),
+        reference: 'NM-${_random.nextInt(900000) + 100000}',
+        note: 'Deposit to ${old.name}',
+      );
+      _transactions.insert(0, txn);
+      return updated;
+    });
+  }
+
+  Future<Account> transfer({
+    required String fromAccountId,
+    required String recipient,
+    required double amount,
+    String? note,
+  }) async {
+    return read('accounts', () {
+      final index = _accounts.indexWhere((acc) => acc.id == fromAccountId);
+      if (index == -1) {
+        throw const RepositoryFailure('Source account not found.');
+      }
+      final old = _accounts[index];
+      if (amount > old.availableBalance) {
+        throw const RepositoryFailure('Insufficient balance for transfer.');
+      }
+      final newTotal = old.totalBalance - amount;
+      final newAvail = old.availableBalance - amount;
+      final updated = Account(
+        id: old.id,
+        name: old.name,
+        shortCode: old.shortCode,
+        kind: old.kind,
+        maskedNumber: old.maskedNumber,
+        currencyCode: old.currencyCode,
+        totalBalance: newTotal,
+        availableBalance: newAvail,
+        cryptoQuantity: old.cryptoQuantity,
+        cryptoUnit: old.cryptoUnit,
+      );
+      _accounts[index] = updated;
+
+      final txn = Txn(
+        id: 'txn_${DateTime.now().millisecondsSinceEpoch}',
+        accountId: fromAccountId,
+        merchant: recipient,
+        category: 'Transfer',
+        amount: amount,
+        currencyCode: old.currencyCode,
+        direction: TxnDirection.outflow,
+        type: TxnType.transfer,
+        status: TxnStatus.completed,
+        date: DateTime.now(),
+        reference: 'NM-${_random.nextInt(900000) + 100000}',
+        note: note,
+      );
+      _transactions.insert(0, txn);
+
+      final targetIndex = _accounts.indexWhere(
+        (acc) =>
+            acc.id == recipient ||
+            acc.name.toLowerCase() == recipient.toLowerCase() ||
+            acc.maskedNumber == recipient,
+      );
+      if (targetIndex != -1 && targetIndex != index) {
+        final targetOld = _accounts[targetIndex];
+        _accounts[targetIndex] = Account(
+          id: targetOld.id,
+          name: targetOld.name,
+          shortCode: targetOld.shortCode,
+          kind: targetOld.kind,
+          maskedNumber: targetOld.maskedNumber,
+          currencyCode: targetOld.currencyCode,
+          totalBalance: targetOld.totalBalance + amount,
+          availableBalance: targetOld.availableBalance + amount,
+          cryptoQuantity: targetOld.cryptoQuantity,
+          cryptoUnit: targetOld.cryptoUnit,
+        );
+        _transactions.insert(
+          0,
+          Txn(
+            id: 'txn_${DateTime.now().millisecondsSinceEpoch + 1}',
+            accountId: targetOld.id,
+            merchant: old.name,
+            category: 'Transfer',
+            amount: amount,
+            currencyCode: targetOld.currencyCode,
+            direction: TxnDirection.inflow,
+            type: TxnType.transfer,
+            status: TxnStatus.completed,
+            date: DateTime.now(),
+            reference: 'NM-${_random.nextInt(900000) + 100000}',
+            note: note,
+          ),
+        );
+      }
+
+      return updated;
+    });
+  }
+
   Future<List<BankCard>> cards() =>
       read('cards', () => List<BankCard>.unmodifiable(_cards));
 
@@ -146,6 +278,7 @@ class MockDataSource {
     required String fullName,
     required String email,
     required String mobile,
+    required String password,
   }) async {
     await Future<void>.delayed(_latency());
     _profile = UserProfile(

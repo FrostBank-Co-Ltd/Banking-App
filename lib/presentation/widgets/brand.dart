@@ -447,6 +447,7 @@ class FrostField extends StatelessWidget {
     required this.controller,
     required this.hint,
     this.obscure = false,
+    this.prefix,
     this.suffix,
     this.keyboardType,
     this.textInputAction,
@@ -458,6 +459,7 @@ class FrostField extends StatelessWidget {
   final TextEditingController controller;
   final String hint;
   final bool obscure;
+  final Widget? prefix;
   final Widget? suffix;
   final TextInputType? keyboardType;
   final TextInputAction? textInputAction;
@@ -487,6 +489,7 @@ class FrostField extends StatelessWidget {
         ),
         filled: true,
         fillColor: Colors.white.withValues(alpha: 0.1),
+        prefixIcon: prefix,
         suffixIcon: suffix,
         suffixIconColor: Colors.white.withValues(alpha: 0.72),
         contentPadding: const EdgeInsets.symmetric(

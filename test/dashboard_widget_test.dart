@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_bank_app/core/design/theme.dart';
 import 'package:mobile_bank_app/core/format/money.dart';
 import 'package:mobile_bank_app/data/mock_data_source.dart';
+import 'package:mobile_bank_app/data/mock_seed.dart';
 import 'package:mobile_bank_app/presentation/screens/dashboard_screen.dart';
 import 'package:mobile_bank_app/presentation/screens/login_screen.dart';
 import 'package:mobile_bank_app/presentation/widgets/states.dart';
@@ -66,11 +67,14 @@ void main() {
     }
   });
 
-  testWidgets('login opens with demo credentials and allows sign in', (tester) async {
+  testWidgets('login opens clean form and allows sign in', (tester) async {
     await tester.pumpWidget(_harness(const LoginScreen()));
 
     expect(find.text('WELCOME BACK'), findsOneWidget);
     expect(find.text('Sign in'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField).at(0), MockSeed.demoEmail);
+    await tester.enterText(find.byType(TextField).at(1), MockSeed.demoPassword);
 
     await tester.tap(find.text('Sign in'));
     await tester.pumpAndSettle();

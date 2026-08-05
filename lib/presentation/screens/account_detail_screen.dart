@@ -61,13 +61,13 @@ class _AccountBody extends ConsumerWidget {
 
   List<_AccountAction> get _actions => switch (account.kind) {
     AccountKind.savings => const [
-      _AccountAction('Deposit', Icons.south_west_rounded, '/soon/deposit'),
-      _AccountAction('Transfer', Icons.swap_horiz_rounded, '/soon/transfer'),
+      _AccountAction('Deposit', Icons.south_west_rounded, '/deposit'),
+      _AccountAction('Transfer', Icons.swap_horiz_rounded, '/transfer'),
     ],
     AccountKind.wallet => const [
-      _AccountAction('Deposit', Icons.south_west_rounded, '/soon/deposit'),
-      _AccountAction('Send', Icons.north_east_rounded, '/soon/send-money'),
-      _AccountAction('Scan', Icons.qr_code_scanner_rounded, '/soon/qr-payment'),
+      _AccountAction('Deposit', Icons.south_west_rounded, '/deposit'),
+      _AccountAction('Send', Icons.north_east_rounded, '/transfer'),
+      _AccountAction('Scan', Icons.qr_code_scanner_rounded, '/qr-scanner'),
     ],
     AccountKind.crypto => const [
       _AccountAction('Buy', Icons.add_rounded, '/soon/buy-crypto'),
@@ -249,7 +249,7 @@ class _AccountBody extends ConsumerWidget {
             heading: 'No activity yet',
             message: 'Transactions on this account will appear here.',
             actionLabel: 'Add funds',
-            onAction: () => context.push('/soon/deposit'),
+            onAction: () => context.push('/deposit'),
           ),
           builder: (data) => GroupedTransactions(
             rows: data,

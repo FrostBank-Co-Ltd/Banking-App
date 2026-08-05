@@ -158,6 +158,114 @@ class SupabaseAccountRepository implements AccountRepository {
       );
     }
   }
+
+  @override
+  Future<Account> deposit({
+    required String accountId,
+    required double amount,
+  }) async {
+    try {
+      final current = await fetchAccount(accountId);
+      final newTotal = current.totalBalance + amount;
+      final newAvail = current.availableBalance + amount;
+
+      await _client.from('accounts').update({
+        'total_balance': newTotal,
+        'available_balance': newAvail,
+      }).eq('id', accountId);
+
+      final txnId = 'txn_${DateTime.now().millisecondsSinceEpoch}';
+      final refCode =
+          'NM-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+      await _client.from('transactions').insert({
+        'id': txnId,
+        'account_id': accountId,
+        'merchant': 'Deposit',
+        'category': 'Deposit',
+        'amount': amount,
+        'currency_code': current.currencyCode,
+        'direction': 'inflow',
+        'type': 'deposit',
+        'status': 'completed',
+        'date': DateTime.now().toIso8601String(),
+        'reference': refCode,
+        'note': 'Deposit to ${current.name}',
+      });
+
+      return Account(
+        id: current.id,
+        name: current.name,
+        shortCode: current.shortCode,
+        kind: current.kind,
+        maskedNumber: current.maskedNumber,
+        currencyCode: current.currencyCode,
+        totalBalance: newTotal,
+        availableBalance: newAvail,
+        cryptoQuantity: current.cryptoQuantity,
+        cryptoUnit: current.cryptoUnit,
+      );
+    } catch (e) {
+      if (e is RepositoryFailure) rethrow;
+      throw RepositoryFailure('Deposit failed: $e');
+    }
+  }
+
+  @override
+  Future<Account> transfer({
+    required String fromAccountId,
+    required String recipient,
+    required double amount,
+    String? note,
+  }) async {
+    try {
+      final source = await fetchAccount(fromAccountId);
+      if (amount > source.availableBalance) {
+        throw const RepositoryFailure('Insufficient balance for transfer.');
+      }
+
+      final newTotal = source.totalBalance - amount;
+      final newAvail = source.availableBalance - amount;
+
+      await _client.from('accounts').update({
+        'total_balance': newTotal,
+        'available_balance': newAvail,
+      }).eq('id', fromAccountId);
+
+      final txnId = 'txn_${DateTime.now().millisecondsSinceEpoch}';
+      final refCode =
+          'NM-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+      await _client.from('transactions').insert({
+        'id': txnId,
+        'account_id': fromAccountId,
+        'merchant': recipient,
+        'category': 'Transfer',
+        'amount': amount,
+        'currency_code': source.currencyCode,
+        'direction': 'outflow',
+        'type': 'transfer',
+        'status': 'completed',
+        'date': DateTime.now().toIso8601String(),
+        'reference': refCode,
+        'note': note,
+      });
+
+      return Account(
+        id: source.id,
+        name: source.name,
+        shortCode: source.shortCode,
+        kind: source.kind,
+        maskedNumber: source.maskedNumber,
+        currencyCode: source.currencyCode,
+        totalBalance: newTotal,
+        availableBalance: newAvail,
+        cryptoQuantity: source.cryptoQuantity,
+        cryptoUnit: source.cryptoUnit,
+      );
+    } catch (e) {
+      if (e is RepositoryFailure) rethrow;
+      throw RepositoryFailure('Transfer failed: $e');
+    }
+  }
 }
 
 class SupabaseCardRepository implements CardRepository {
@@ -316,6 +424,243 @@ class SupabaseProfileRepository implements ProfileRepository {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Savings Goal Mappers
+// ---------------------------------------------------------------------------
+
+extension _GoalSaveMappers on SupabaseMappers {
+  static GoalSave goalFromMap(Map<String, dynamic> map) {
+    return GoalSave(
+      id: map['id'] as String,
+      name: map['name'] as String,
+      emoji: map['emoji'] as String,
+      targetAmount: (map['target_amount'] as num).toDouble(),
+      balance: (map['balance'] as num).toDouble(),
+      currencyCode: map['currency_code'] as String,
+      dailyRatePercent: (map['daily_rate_percent'] as num).toDouble(),
+      interestEarned: (map['interest_earned'] as num).toDouble(),
+      createdAt: DateTime.parse(map['created_at'] as String),
+      status: _parseEnum(
+        GoalSaveStatus.values,
+        map['status'] as String,
+        GoalSaveStatus.active,
+      ),
+    );
+  }
+
+  static GoalTxn goalTxnFromMap(Map<String, dynamic> map) {
+    return GoalTxn(
+      id: map['id'] as String,
+      goalId: map['goal_id'] as String,
+      kind: _parseEnum(
+        GoalTxnKind.values,
+        (map['kind'] as String).replaceAll('_', ''),
+        GoalTxnKind.transferIn,
+      ),
+      amount: (map['amount'] as num).toDouble(),
+      runningBalance: (map['running_balance'] as num).toDouble(),
+      date: DateTime.parse(map['date'] as String),
+      note: map['note'] as String?,
+    );
+  }
+}
+
+class SupabaseSavingsGoalRepository implements SavingsGoalRepository {
+  SupabaseSavingsGoalRepository([SupabaseClient? client])
+      : _client = client ?? SupabaseConfig.client;
+
+  final SupabaseClient _client;
+
+  @override
+  Future<List<GoalSave>> fetchGoals() async {
+    try {
+      final response = await _client
+          .from('goal_saves')
+          .select()
+          .order('created_at', ascending: false);
+      final list = (response as List)
+          .map((item) =>
+              _GoalSaveMappers.goalFromMap(item as Map<String, dynamic>))
+          .toList();
+      if (list.isEmpty) return MockSeed.goalSaves();
+      return list;
+    } catch (_) {
+      return MockSeed.goalSaves();
+    }
+  }
+
+  @override
+  Future<GoalSave> fetchGoal(String id) async {
+    try {
+      final response = await _client
+          .from('goal_saves')
+          .select()
+          .eq('id', id)
+          .maybeSingle();
+      if (response != null) {
+        return _GoalSaveMappers.goalFromMap(response);
+      }
+      return MockSeed.goalSaves().firstWhere(
+        (g) => g.id == id,
+        orElse: () => MockSeed.goalSaves().first,
+      );
+    } catch (_) {
+      return MockSeed.goalSaves().firstWhere(
+        (g) => g.id == id,
+        orElse: () => MockSeed.goalSaves().first,
+      );
+    }
+  }
+
+  @override
+  Future<GoalSave> openGoal({
+    required String name,
+    required String emoji,
+    required double targetAmount,
+    required double initialDeposit,
+  }) async {
+    final id = 'goal_${DateTime.now().millisecondsSinceEpoch}';
+    final now = DateTime.now();
+    final goalMap = {
+      'id': id,
+      'name': name,
+      'emoji': emoji,
+      'target_amount': targetAmount,
+      'balance': initialDeposit,
+      'currency_code': 'USD',
+      'daily_rate_percent': 0.011918,
+      'interest_earned': 0.0,
+      'created_at': now.toIso8601String(),
+      'status': 'active',
+    };
+
+    try {
+      await _client.from('goal_saves').insert(goalMap);
+      if (initialDeposit > 0) {
+        await _client.from('goal_transactions').insert({
+          'id': 'gtxn_${now.millisecondsSinceEpoch}',
+          'goal_id': id,
+          'kind': 'transferIn',
+          'amount': initialDeposit,
+          'running_balance': initialDeposit,
+          'date': now.toIso8601String(),
+          'note': 'Opening deposit',
+        });
+      }
+      return _GoalSaveMappers.goalFromMap(goalMap);
+    } catch (e) {
+      throw RepositoryFailure('Could not create goal: $e');
+    }
+  }
+
+  @override
+  Future<GoalSave> transferIn({
+    required String goalId,
+    required double amount,
+  }) async {
+    try {
+      final current = await fetchGoal(goalId);
+      final newBalance = current.balance + amount;
+
+      await _client.from('goal_saves').update({
+        'balance': newBalance,
+      }).eq('id', goalId);
+
+      await _client.from('goal_transactions').insert({
+        'id': 'gtxn_${DateTime.now().millisecondsSinceEpoch}',
+        'goal_id': goalId,
+        'kind': 'transferIn',
+        'amount': amount,
+        'running_balance': newBalance,
+        'date': DateTime.now().toIso8601String(),
+        'note': null,
+      });
+
+      return current.copyWith(balance: newBalance);
+    } catch (e) {
+      if (e is RepositoryFailure) rethrow;
+      throw RepositoryFailure('Transfer failed: $e');
+    }
+  }
+
+  @override
+  Future<GoalSave> transferOut({
+    required String goalId,
+    required double amount,
+  }) async {
+    try {
+      final current = await fetchGoal(goalId);
+      if (amount > current.balance) {
+        throw const RepositoryFailure('Insufficient goal balance.');
+      }
+      final newBalance = current.balance - amount;
+
+      await _client.from('goal_saves').update({
+        'balance': newBalance,
+      }).eq('id', goalId);
+
+      await _client.from('goal_transactions').insert({
+        'id': 'gtxn_${DateTime.now().millisecondsSinceEpoch}',
+        'goal_id': goalId,
+        'kind': 'transferOut',
+        'amount': amount,
+        'running_balance': newBalance,
+        'date': DateTime.now().toIso8601String(),
+        'note': null,
+      });
+
+      return current.copyWith(balance: newBalance);
+    } catch (e) {
+      if (e is RepositoryFailure) rethrow;
+      throw RepositoryFailure('Transfer failed: $e');
+    }
+  }
+
+  @override
+  Future<GoalSave> closeGoal(String id) async {
+    try {
+      final current = await fetchGoal(id);
+      await _client.from('goal_saves').update({
+        'status': 'closed',
+        'balance': 0.0,
+      }).eq('id', id);
+
+      return current.copyWith(
+        status: GoalSaveStatus.closed,
+        balance: 0.0,
+      );
+    } catch (e) {
+      if (e is RepositoryFailure) rethrow;
+      throw RepositoryFailure('Could not close goal: $e');
+    }
+  }
+
+  @override
+  Future<List<GoalTxn>> fetchGoalTransactions(String goalId) async {
+    try {
+      final response = await _client
+          .from('goal_transactions')
+          .select()
+          .eq('goal_id', goalId)
+          .order('date', ascending: false);
+      final list = (response as List)
+          .map((item) =>
+              _GoalSaveMappers.goalTxnFromMap(item as Map<String, dynamic>))
+          .toList();
+      if (list.isEmpty) {
+        return MockSeed.goalTransactions()
+            .where((t) => t.goalId == goalId)
+            .toList();
+      }
+      return list;
+    } catch (_) {
+      return MockSeed.goalTransactions()
+          .where((t) => t.goalId == goalId)
+          .toList();
+    }
+  }
+}
+
 class SupabaseAuthRepository implements AuthRepository {
   SupabaseAuthRepository([SupabaseClient? client])
       : _client = client ?? SupabaseConfig.client;
@@ -332,7 +677,7 @@ class SupabaseAuthRepository implements AuthRepository {
           .select()
           .eq('id', session.user.id)
           .maybeSingle();
-      if (response == null) return MockSeed.profile;
+      if (response == null) return null;
       return SupabaseMappers.profileFromMap(response);
     } catch (e) {
       return null;
@@ -384,15 +729,17 @@ class SupabaseAuthRepository implements AuthRepository {
     required String fullName,
     required String email,
     required String mobile,
+    required String password,
   }) async {
     try {
       final response = await _client.auth.signUp(
         email: email,
-        password: 'Password123!',
+        password: password,
         data: {'full_name': fullName, 'mobile': mobile},
       );
       final user = response.user;
-      final userId = user?.id ?? DateTime.now().millisecondsSinceEpoch.toString();
+      final userId =
+          user?.id ?? DateTime.now().millisecondsSinceEpoch.toString();
 
       final profileMap = {
         'id': userId,
@@ -403,6 +750,29 @@ class SupabaseAuthRepository implements AuthRepository {
       };
 
       await _client.from('profiles').upsert(profileMap);
+
+      // Create an initial Everyday Wallet for newly registered user if no accounts exist
+      try {
+        final existingAccounts =
+            await _client.from('accounts').select().limit(1);
+        if ((existingAccounts as List).isEmpty) {
+          final defaultWallet = {
+            'id': 'acc_wallet_$userId',
+            'name': 'Everyday Wallet',
+            'short_code': 'WALLET',
+            'kind': 'wallet',
+            'masked_number':
+                '•••• ${userId.length >= 4 ? userId.substring(userId.length - 4) : '4182'}',
+            'currency_code': 'USD',
+            'total_balance': 1000.00,
+            'available_balance': 1000.00,
+          };
+          await _client.from('accounts').insert(defaultWallet);
+        }
+      } catch (_) {
+        // Safe fallback if table creation or insertion throws
+      }
+
       return SupabaseMappers.profileFromMap(profileMap);
     } on AuthException catch (e) {
       throw RepositoryFailure(e.message);
