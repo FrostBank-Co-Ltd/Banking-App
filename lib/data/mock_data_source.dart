@@ -15,7 +15,10 @@ class MockDataSource {
       _cards = List.of(MockSeed.cards),
       _transactions = MockSeed.transactions(now: now),
       _promos = List.of(MockSeed.promos),
-      _profile = MockSeed.profile;
+      _profile = MockSeed.profile,
+      _goals = MockSeed.goalSaves(now: now),
+      _goalTxns = MockSeed.goalTransactions(now: now),
+      _goalCounter = MockSeed.goalSaves().length;
 
   final Random _random;
   final List<Account> _accounts;
@@ -23,6 +26,9 @@ class MockDataSource {
   final List<Txn> _transactions;
   final List<Promo> _promos;
   UserProfile _profile;
+  final List<GoalSave> _goals;
+  final List<GoalTxn> _goalTxns;
+  int _goalCounter;
 
   /// Domains that should fail, so error states can be verified without a real
   /// backend. Add a key such as `accounts` or `transactions`.
@@ -132,4 +138,148 @@ class MockDataSource {
     await Future<void>.delayed(const Duration(milliseconds: 120));
     _session = null;
   }
+
+  // ---------------------------------------------------------------------------
+  // Goal Saves
+  // ---------------------------------------------------------------------------
+
+  Future<List<GoalSave>> goals() => read(
+        'savings',
+        () => List<GoalSave>.unmodifiable(
+          List.of(_goals)..sort((a, b) => b.createdAt.compareTo(a.createdAt)),
+        ),
+      );
+
+  Future<GoalSave> goal(String id) => read('savings', () {
+        final match = _goals.where((g) => g.id == id).firstOrNull;
+        if (match == null) {
+          throw const RepositoryFailure('That goal is no longer available.');
+        }
+        return match;
+      });
+
+  Future<GoalSave> openGoal({
+    required String name,
+    required String emoji,
+    required double targetAmount,
+    required double initialDeposit,
+  }) async {
+    await Future<void>.delayed(_latency());
+    _goalCounter++;
+    final newGoal = GoalSave(
+      id: 'goal_${_goalCounter.toString().padLeft(3, '0')}',
+      name: name.trim(),
+      emoji: emoji,
+      targetAmount: targetAmount,
+      balance: initialDeposit,
+      currencyCode: 'USD',
+      dailyRatePercent: MockSeed.goalDailyRate,
+      interestEarned: 0,
+      createdAt: DateTime.now(),
+      status: GoalSaveStatus.active,
+    );
+    _goals.add(newGoal);
+
+    if (initialDeposit > 0) {
+      _goalTxns.add(GoalTxn(
+        id: 'gtxn_${DateTime.now().millisecondsSinceEpoch}',
+        goalId: newGoal.id,
+        kind: GoalTxnKind.transferIn,
+        amount: initialDeposit,
+        runningBalance: initialDeposit,
+        date: DateTime.now(),
+        note: 'Initial deposit',
+      ));
+    }
+    return newGoal;
+  }
+
+  Future<GoalSave> transferIn({
+    required String goalId,
+    required double amount,
+  }) async {
+    await Future<void>.delayed(_latency());
+    final index = _goals.indexWhere((g) => g.id == goalId);
+    if (index == -1) {
+      throw const RepositoryFailure('That goal is no longer available.');
+    }
+    final old = _goals[index];
+    if (old.status != GoalSaveStatus.active) {
+      throw const RepositoryFailure('You can only add funds to an active goal.');
+    }
+    final updated = old.copyWith(balance: old.balance + amount);
+    _goals[index] = updated;
+    _goalTxns.add(GoalTxn(
+      id: 'gtxn_${DateTime.now().millisecondsSinceEpoch}',
+      goalId: goalId,
+      kind: GoalTxnKind.transferIn,
+      amount: amount,
+      runningBalance: updated.balance,
+      date: DateTime.now(),
+    ));
+    return updated;
+  }
+
+  Future<GoalSave> transferOut({
+    required String goalId,
+    required double amount,
+  }) async {
+    await Future<void>.delayed(_latency());
+    final index = _goals.indexWhere((g) => g.id == goalId);
+    if (index == -1) {
+      throw const RepositoryFailure('That goal is no longer available.');
+    }
+    final old = _goals[index];
+    if (old.status != GoalSaveStatus.active) {
+      throw const RepositoryFailure(
+          'You can only withdraw from an active goal.');
+    }
+    if (amount > old.balance) {
+      throw const RepositoryFailure(
+          'Withdrawal amount exceeds the goal balance.');
+    }
+    final updated = old.copyWith(balance: old.balance - amount);
+    _goals[index] = updated;
+    _goalTxns.add(GoalTxn(
+      id: 'gtxn_${DateTime.now().millisecondsSinceEpoch}',
+      goalId: goalId,
+      kind: GoalTxnKind.transferOut,
+      amount: amount,
+      runningBalance: updated.balance,
+      date: DateTime.now(),
+    ));
+    return updated;
+  }
+
+  Future<GoalSave> closeGoal(String id) async {
+    await Future<void>.delayed(_latency());
+    final index = _goals.indexWhere((g) => g.id == id);
+    if (index == -1) {
+      throw const RepositoryFailure('That goal is no longer available.');
+    }
+    final old = _goals[index];
+    final updated = old.copyWith(status: GoalSaveStatus.closed, balance: 0);
+    _goals[index] = updated;
+    if (old.balance > 0) {
+      _goalTxns.add(GoalTxn(
+        id: 'gtxn_${DateTime.now().millisecondsSinceEpoch}',
+        goalId: id,
+        kind: GoalTxnKind.transferOut,
+        amount: old.balance,
+        runningBalance: 0,
+        date: DateTime.now(),
+        note: 'Goal closed — funds returned',
+      ));
+    }
+    return updated;
+  }
+
+  Future<List<GoalTxn>> goalTransactions(String goalId) =>
+      read('savings', () {
+        final rows = _goalTxns
+            .where((t) => t.goalId == goalId)
+            .toList()
+          ..sort((a, b) => b.date.compareTo(a.date));
+        return List<GoalTxn>.unmodifiable(rows);
+      });
 }
