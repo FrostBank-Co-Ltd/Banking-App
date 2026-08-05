@@ -74,32 +74,7 @@ class AppShell extends StatelessWidget {
                       isActive: active == _peripheral[1].branch,
                       onTap: () => _go(_peripheral[1].branch),
                     ),
-                    Pressable(
-                      onTap: () => _go(0),
-                      semanticLabel: 'Home',
-                      borderRadius: AppRadius.pill,
-                      child: SizedBox(
-                        width: 56,
-                        height: 56,
-                        child: Center(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              borderRadius: AppRadius.all(AppRadius.md),
-                              border: Border.all(
-                                color: active == 0
-                                    ? tokens.accent
-                                    : Colors.transparent,
-                                width: 2,
-                              ),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(2),
-                              child: FrostMark(size: 40),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
+                    _HomeMark(isActive: active == 0, onTap: () => _go(0)),
                     _NavItem(
                       destination: _peripheral[2],
                       isActive: active == _peripheral[2].branch,
@@ -135,6 +110,63 @@ class _Destination {
   final String label;
 }
 
+/// The brand mark in the centre of the pill. Lifts and picks up a ring when the
+/// home branch is the one in view.
+class _HomeMark extends StatelessWidget {
+  const _HomeMark({required this.isActive, required this.onTap});
+
+  final bool isActive;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.tokens;
+
+    return Pressable(
+      onTap: onTap,
+      semanticLabel: 'Home${isActive ? ', selected' : ''}',
+      borderRadius: AppRadius.pill,
+      child: SizedBox(
+        width: 56,
+        height: 56,
+        child: Center(
+          child: TweenAnimationBuilder<double>(
+            tween: Tween<double>(end: isActive ? 1 : 0),
+            duration: Motion.resolve(context, Motion.medium),
+            curve: Motion.emphasized,
+            builder: (context, t, child) => Transform.scale(
+              scale: 1 + 0.06 * t,
+              child: Transform.translate(
+                offset: Offset(0, Motion.amount(context, -2) * t),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: AppRadius.all(AppRadius.md),
+                    border: Border.all(
+                      color: tokens.accent.withValues(alpha: t),
+                      width: 2,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: tokens.accent.withValues(alpha: 0.45 * t),
+                        blurRadius: 16 * t,
+                      ),
+                    ],
+                  ),
+                  child: child,
+                ),
+              ),
+            ),
+            child: const Padding(
+              padding: EdgeInsets.all(2),
+              child: FrostMark(size: 40),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _NavItem extends StatelessWidget {
   const _NavItem({
     required this.destination,
@@ -149,39 +181,68 @@ class _NavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = context.tokens;
-    final color = isActive ? tokens.accent : Colors.white.withValues(alpha: 0.7);
+    final resting = Colors.white.withValues(alpha: 0.7);
 
     return Pressable(
       onTap: onTap,
       semanticLabel: '${destination.label}${isActive ? ', selected' : ''}',
       borderRadius: AppRadius.pill,
-      child: SizedBox(
-        width: 60,
-        height: 60,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(destination.icon, size: 20, color: color),
-            const SizedBox(height: 3),
-            Text(
-              destination.label,
-              style: AppType.labelSmall.copyWith(color: color, fontSize: 9.5),
-              maxLines: 1,
+      // Selection is a single driver, so the tint, the lift, the icon size, and
+      // the accent bar all resolve on one timeline instead of drifting apart.
+      child: TweenAnimationBuilder<double>(
+        tween: Tween<double>(end: isActive ? 1 : 0),
+        duration: Motion.resolve(context, Motion.medium),
+        curve: Motion.emphasized,
+        builder: (context, t, _) {
+          final color = Color.lerp(resting, tokens.accent, t)!;
+          return SizedBox(
+            width: 60,
+            height: 60,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Hierarchy: a soft wash sets the destination in view apart
+                // before colour is read.
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: tokens.accent.withValues(alpha: 0.14 * t),
+                      borderRadius: AppRadius.all(AppRadius.pill),
+                    ),
+                  ),
+                ),
+                Transform.translate(
+                  offset: Offset(0, Motion.amount(context, -1.5) * t),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(destination.icon, size: 20 + 2 * t, color: color),
+                      const SizedBox(height: 3),
+                      Text(
+                        destination.label,
+                        style: AppType.labelSmall.copyWith(
+                          color: color,
+                          fontSize: 9.5,
+                        ),
+                        maxLines: 1,
+                      ),
+                      const SizedBox(height: 3),
+                      // Hierarchy: the accent bar marks the destination in view.
+                      Container(
+                        height: 2,
+                        width: 16 * t,
+                        decoration: BoxDecoration(
+                          color: tokens.accent,
+                          borderRadius: AppRadius.all(AppRadius.pill),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 3),
-            // Hierarchy: the accent bar marks the destination in view.
-            AnimatedContainer(
-              duration: Motion.resolve(context, Motion.short),
-              curve: Motion.standard,
-              height: 2,
-              width: isActive ? 16 : 0,
-              decoration: BoxDecoration(
-                color: tokens.accent,
-                borderRadius: AppRadius.all(AppRadius.pill),
-              ),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

@@ -1,13 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/design/motion.dart';
 import '../../core/design/tokens.dart';
 
 /// Tap wrapper used by every card, tile, row, and icon control.
 ///
-/// Gives three things that would otherwise be repeated on every screen: a
-/// 0.98 press scale, a keyboard focus ring resolved from the accent token, and
+/// Gives four things that would otherwise be repeated on every screen: a press
+/// that gives way under the finger and springs back on release, a light haptic
+/// tick on activation, a keyboard focus ring resolved from the accent token, and
 /// a minimum 48 by 48 logical pixel target.
+///
+/// The press takes hold in [Motion.instant] and releases over [Motion.short],
+/// because a control that yields slowly feels unresponsive while one that
+/// returns instantly feels brittle.
 class Pressable extends StatefulWidget {
   const Pressable({
     required this.child,
@@ -16,6 +22,7 @@ class Pressable extends StatefulWidget {
     this.borderRadius = AppRadius.md,
     this.minSize = Layout.minTapTarget,
     this.isButton = true,
+    this.haptic = true,
     super.key,
   });
 
@@ -26,17 +33,33 @@ class Pressable extends StatefulWidget {
   final double minSize;
   final bool isButton;
 
+  /// A light tick on activation. Turned off for controls that fire in bursts.
+  final bool haptic;
+
   @override
   State<Pressable> createState() => _PressableState();
 }
 
-class _PressableState extends State<Pressable> {
-  bool _pressed = false;
+class _PressableState extends State<Pressable>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _press = AnimationController(
+    vsync: this,
+    duration: Motion.instant,
+    reverseDuration: Motion.short,
+  );
+
   bool _focused = false;
 
-  void _setPressed(bool value) {
-    if (_pressed == value) return;
-    setState(() => _pressed = value);
+  @override
+  void dispose() {
+    _press.dispose();
+    super.dispose();
+  }
+
+  void _activate() {
+    if (widget.onTap == null) return;
+    if (widget.haptic) HapticFeedback.selectionClick();
+    widget.onTap!.call();
   }
 
   @override
@@ -44,6 +67,18 @@ class _PressableState extends State<Pressable> {
     final tokens = context.tokens;
     final enabled = widget.onTap != null;
     final radius = AppRadius.all(widget.borderRadius);
+    final reduced = Motion.isReduced(context);
+
+    final target = ConstrainedBox(
+      constraints: BoxConstraints(
+        minWidth: widget.minSize,
+        minHeight: widget.minSize,
+      ),
+      child: ExcludeSemantics(
+        excluding: widget.semanticLabel != null,
+        child: widget.child,
+      ),
+    );
 
     return Semantics(
       button: widget.isButton,
@@ -58,40 +93,47 @@ class _PressableState extends State<Pressable> {
         actions: <Type, Action<Intent>>{
           ActivateIntent: CallbackAction<ActivateIntent>(
             onInvoke: (_) {
-              widget.onTap?.call();
+              _activate();
               return null;
             },
           ),
         },
         child: GestureDetector(
-          onTap: widget.onTap,
-          onTapDown: enabled ? (_) => _setPressed(true) : null,
-          onTapUp: enabled ? (_) => _setPressed(false) : null,
-          onTapCancel: enabled ? () => _setPressed(false) : null,
+          onTap: enabled ? _activate : null,
+          onTapDown: enabled ? (_) => _press.forward() : null,
+          onTapUp: enabled ? (_) => _press.reverse() : null,
+          onTapCancel: enabled ? () => _press.reverse() : null,
           behavior: HitTestBehavior.opaque,
-          child: AnimatedScale(
-            // Feedback: the surface gives way under the finger.
-            scale: _pressed ? 0.98 : 1,
-            duration: Motion.resolve(context, Motion.short),
-            curve: Motion.standard,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: radius,
-                border: _focused
-                    ? Border.all(color: tokens.accent, width: 2)
-                    : null,
-              ),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minWidth: widget.minSize,
-                  minHeight: widget.minSize,
-                ),
-                child: ExcludeSemantics(
-                  excluding: widget.semanticLabel != null,
-                  child: widget.child,
-                ),
-              ),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: radius,
+              border: _focused
+                  ? Border.all(color: tokens.accent, width: 2)
+                  : null,
             ),
+            child: reduced
+                ? target
+                : AnimatedBuilder(
+                    animation: _press,
+                    child: target,
+                    builder: (context, child) {
+                      // Feedback: the surface sinks under the finger, then
+                      // springs back a hair past its resting size. The curve is
+                      // mirrored on release so the overshoot lands above one
+                      // rather than below it.
+                      final v = _press.value;
+                      final t = _press.status == AnimationStatus.reverse
+                          ? 1 - Motion.settle.transform(1 - v)
+                          : Motion.standard.transform(v);
+                      return Transform.translate(
+                        offset: Offset(0, t),
+                        child: Transform.scale(
+                          scale: 1 - 0.035 * t,
+                          child: child,
+                        ),
+                      );
+                    },
+                  ),
           ),
         ),
       ),
