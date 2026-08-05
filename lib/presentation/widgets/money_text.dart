@@ -36,8 +36,15 @@ class MoneyText extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final hidden =
-        maskable && ref.watch(preferencesProvider).balancesHidden;
+    final prefs = ref.watch(preferencesProvider);
+    final hidden = maskable && prefs.balancesHidden;
+    final activeCurrencyCode =
+        (currencyCode == 'USD') ? prefs.currencyCode : currencyCode;
+    final convertedValue = Money.convert(
+      value,
+      fromCurrency: currencyCode,
+      toCurrency: activeCurrencyCode,
+    );
     final tokens = context.tokens;
     final resolved = (style ?? AppType.numericMedium).copyWith(
       color: color ?? tokens.textPrimary,
@@ -45,13 +52,13 @@ class MoneyText extends ConsumerWidget {
 
     final visible = hidden
         ? Money.maskGlyphs
-        : Money.format(value, currencyCode: currencyCode, signed: signed);
+        : Money.format(convertedValue, currencyCode: activeCurrencyCode, signed: signed);
 
     final spoken = hidden
         ? 'Amount hidden'
         : [
             ?label,
-            Money.spoken(value, currencyCode: currencyCode, signed: signed),
+            Money.spoken(convertedValue, currencyCode: activeCurrencyCode, signed: signed),
           ].join(', ');
 
     return Semantics(

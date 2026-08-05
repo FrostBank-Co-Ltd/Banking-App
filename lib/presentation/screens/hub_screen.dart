@@ -104,7 +104,7 @@ class HubScreen extends ConsumerWidget {
                   child: HubTile(
                     icon: Icons.groups_rounded,
                     label: 'Split Bills',
-                    route: '/soon/split-bills',
+                    route: '/split-bills',
                   ),
                 ),
                 SizedBox(width: Space.x3),

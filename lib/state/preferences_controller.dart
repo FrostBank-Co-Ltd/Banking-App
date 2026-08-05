@@ -1,12 +1,37 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+class CurrencyOption {
+  const CurrencyOption({
+    required this.code,
+    required this.name,
+    required this.symbol,
+  });
+
+  final String code;
+  final String name;
+  final String symbol;
+
+  String get displayName => '$name ($symbol)';
+}
+
+const List<CurrencyOption> supportedCurrencies = [
+  CurrencyOption(code: 'USD', name: 'US dollar', symbol: '\$'),
+  CurrencyOption(code: 'EUR', name: 'Euro', symbol: '€'),
+  CurrencyOption(code: 'GBP', name: 'British pound', symbol: '£'),
+  CurrencyOption(code: 'JPY', name: 'Japanese yen', symbol: '¥'),
+  CurrencyOption(code: 'PHP', name: 'Philippine peso', symbol: '₱'),
+  CurrencyOption(code: 'CAD', name: 'Canadian dollar', symbol: 'CA\$'),
+  CurrencyOption(code: 'AUD', name: 'Australian dollar', symbol: 'A\$'),
+];
+
 /// User preferences that affect the whole application.
 @immutable
 class Preferences {
   const Preferences({
     this.themeMode = ThemeMode.system,
     this.balancesHidden = false,
+    this.currencyCode = 'USD',
   });
 
   final ThemeMode themeMode;
@@ -14,10 +39,22 @@ class Preferences {
   /// When true, every monetary figure renders as a fixed mask glyph sequence.
   final bool balancesHidden;
 
-  Preferences copyWith({ThemeMode? themeMode, bool? balancesHidden}) =>
+  final String currencyCode;
+
+  CurrencyOption get activeCurrency => supportedCurrencies.firstWhere(
+        (c) => c.code == currencyCode,
+        orElse: () => supportedCurrencies.first,
+      );
+
+  Preferences copyWith({
+    ThemeMode? themeMode,
+    bool? balancesHidden,
+    String? currencyCode,
+  }) =>
       Preferences(
         themeMode: themeMode ?? this.themeMode,
         balancesHidden: balancesHidden ?? this.balancesHidden,
+        currencyCode: currencyCode ?? this.currencyCode,
       );
 }
 
@@ -30,4 +67,7 @@ class PreferencesController extends Notifier<Preferences> {
 
   void toggleBalanceVisibility() =>
       state = state.copyWith(balancesHidden: !state.balancesHidden);
+
+  void setCurrencyCode(String code) =>
+      state = state.copyWith(currencyCode: code);
 }
