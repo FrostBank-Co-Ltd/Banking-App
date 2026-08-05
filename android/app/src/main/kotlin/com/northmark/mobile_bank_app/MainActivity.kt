@@ -1,4 +1,4 @@
-package com.northmark.mobile_bank_app
+package com.FrostBank.mobile_bank_app
 
 import io.flutter.embedding.android.FlutterActivity
 

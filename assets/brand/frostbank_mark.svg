@@ -1,0 +1,53 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Base -->
+    <linearGradient id="base" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0A0D2C"/>
+      <stop offset="100%" stop-color="#081135"/>
+    </linearGradient>
+
+    <!-- Bottom-left icy blue -->
+    <radialGradient id="blueGlow" cx="12%" cy="88%" r="75%" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#EDF9FF"/>
+      <stop offset="18%" stop-color="#DDF4FF"/>
+      <stop offset="35%" stop-color="#BFD6FF"/>
+      <stop offset="58%" stop-color="#4EA3FF" stop-opacity=".85"/>
+      <stop offset="100%" stop-color="#4EA3FF" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Top-right -->
+    <radialGradient id="topRight" cx="95%" cy="5%" r="70%" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#BFD6FF"/>
+      <stop offset="25%" stop-color="#B0CBFF" stop-opacity=".85"/>
+      <stop offset="60%" stop-color="#7E7AF8" stop-opacity=".45"/>
+      <stop offset="100%" stop-color="#7E7AF8" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Purple -->
+    <radialGradient id="purpleGlow" cx="90%" cy="35%" r="60%" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0B0D22" stop-opacity=".55"/>
+      <stop offset="40%" stop-color="#5548D9" stop-opacity=".32"/>
+      <stop offset="100%" stop-color="#5548D9" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Center lift -->
+    <radialGradient id="centerLift" cx="50%" cy="50%" r="45%" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#274AAE" stop-opacity=".8"/>
+      <stop offset="100%" stop-color="#274AAE" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect x="20" y="20" width="472" height="472" rx="80" fill="url(#base)"/>
+  <rect x="20" y="20" width="472" height="472" rx="80" fill="url(#blueGlow)"/>
+  <rect x="20" y="20" width="472" height="472" rx="80" fill="url(#topRight)"/>
+  <rect x="20" y="20" width="472" height="472" rx="80" fill="url(#purpleGlow)"/>
+  <rect x="20" y="20" width="472" height="472" rx="80" fill="url(#centerLift)"/>
+
+  <!-- Logo -->
+  <g stroke="white" stroke-width="22" stroke-linecap="square">
+    <line x1="120" y1="256" x2="392" y2="256"/>
+    <line x1="170" y1="170" x2="342" y2="342"/>
+    <line x1="170" y1="342" x2="342" y2="170"/>
+  </g>
+</svg>

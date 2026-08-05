@@ -1,0 +1,563 @@
+import 'dart:math' as math;
+import 'dart:ui' as ui;
+
+import 'package:flutter/material.dart';
+
+import '../../core/design/tokens.dart';
+import '../../core/design/typography.dart';
+
+/// The FrostBank mark, ported from `assets/brand/frostbank_mark.svg`.
+///
+/// The SVG is the source of truth for the geometry. Painting it keeps the mark
+/// crisp at every size on Android, iOS, and the web without a rasterised asset.
+class FrostMark extends StatelessWidget {
+  const FrostMark({this.size = 44, this.radiusRatio = 0.28, super.key});
+
+  final double size;
+
+  /// Corner radius as a share of [size]. The SVG uses 80 of 472.
+  final double radiusRatio;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: 'FrostBank',
+    image: true,
+    child: SizedBox.square(
+      dimension: size,
+      child: CustomPaint(painter: _FrostMarkPainter(radiusRatio: radiusRatio)),
+    ),
+  );
+}
+
+class _FrostMarkPainter extends CustomPainter {
+  const _FrostMarkPainter({required this.radiusRatio});
+
+  final double radiusRatio;
+
+  // Line geometry from the SVG, expressed as a share of the tile.
+  static const double _lineNear = 0.212;
+  static const double _lineFar = 0.788;
+  static const double _diagNear = 0.318;
+  static const double _diagFar = 0.682;
+  static const double _strokeRatio = 0.047;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final side = size.shortestSide;
+    final rect = Offset.zero & Size(side, side);
+    final rounded = RRect.fromRectAndRadius(
+      rect,
+      Radius.circular(side * radiusRatio),
+    );
+
+    canvas.save();
+    canvas.clipRRect(rounded);
+    FrostGradients.paintLayers(canvas, rect);
+    canvas.restore();
+
+    final stroke = Paint()
+      ..color = Colors.white
+      ..strokeWidth = side * _strokeRatio
+      ..strokeCap = StrokeCap.square
+      ..isAntiAlias = true;
+
+    canvas.drawLine(
+      Offset(side * _lineNear, side * 0.5),
+      Offset(side * _lineFar, side * 0.5),
+      stroke,
+    );
+    canvas.drawLine(
+      Offset(side * _diagNear, side * _diagNear),
+      Offset(side * _diagFar, side * _diagFar),
+      stroke,
+    );
+    canvas.drawLine(
+      Offset(side * _diagNear, side * _diagFar),
+      Offset(side * _diagFar, side * _diagNear),
+      stroke,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _FrostMarkPainter oldDelegate) =>
+      oldDelegate.radiusRatio != radiusRatio;
+}
+
+/// The layered gradient recipe shared by the mark and every brand surface.
+abstract final class FrostGradients {
+  static void paintLayers(Canvas canvas, Rect rect, {double glow = 1}) {
+    final base = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Palette.frostBaseTop, Palette.frostBaseBottom],
+      ).createShader(rect);
+    canvas.drawRect(rect, base);
+
+    final reach = math.max(rect.width, rect.height);
+
+    // Bottom left icy bloom, the signal colour of the brand.
+    _radial(
+      canvas,
+      rect,
+      center: Offset(rect.left + rect.width * 0.12, rect.top + rect.height * 0.9),
+      radius: reach * 0.78,
+      stops: const [0, 0.18, 0.35, 0.58, 1],
+      colors: [
+        Palette.frostIceWhite.withValues(alpha: glow),
+        Palette.frostIcePale.withValues(alpha: 0.94 * glow),
+        Palette.skyBlue.withValues(alpha: 0.86 * glow),
+        Palette.frostIceBlue.withValues(alpha: 0.62 * glow),
+        Palette.frostIceBlue.withValues(alpha: 0),
+      ],
+    );
+
+    // Top right cool light.
+    _radial(
+      canvas,
+      rect,
+      center: Offset(rect.left + rect.width * 0.96, rect.top + rect.height * 0.04),
+      radius: reach * 0.72,
+      stops: const [0, 0.25, 0.6, 1],
+      colors: [
+        Palette.skyBlue.withValues(alpha: 0.92 * glow),
+        Palette.frostPeriwinkle.withValues(alpha: 0.72 * glow),
+        Palette.frostViolet.withValues(alpha: 0.38 * glow),
+        Palette.frostViolet.withValues(alpha: 0),
+      ],
+    );
+
+    // Deep violet shadow that keeps the right side from going flat.
+    _radial(
+      canvas,
+      rect,
+      center: Offset(rect.left + rect.width * 0.9, rect.top + rect.height * 0.35),
+      radius: reach * 0.6,
+      stops: const [0, 0.4, 1],
+      colors: [
+        Palette.frostInk.withValues(alpha: 0.55),
+        Palette.frostPurple.withValues(alpha: 0.32),
+        Palette.frostPurple.withValues(alpha: 0),
+      ],
+    );
+
+    // Centre lift.
+    _radial(
+      canvas,
+      rect,
+      center: rect.center,
+      radius: reach * 0.46,
+      stops: const [0, 1],
+      colors: [
+        Palette.frostLift.withValues(alpha: 0.8 * glow),
+        Palette.frostLift.withValues(alpha: 0),
+      ],
+    );
+  }
+
+  static void _radial(
+    Canvas canvas,
+    Rect rect, {
+    required Offset center,
+    required double radius,
+    required List<double> stops,
+    required List<Color> colors,
+  }) {
+    final paint = Paint()
+      ..shader = ui.Gradient.radial(center, radius, colors, stops);
+    canvas.drawRect(rect, paint);
+  }
+}
+
+/// Brand backdrop for the splash, the sign in screen, and the dashboard header.
+///
+/// [glow] pulls the icy bloom back so body text keeps its contrast on large
+/// surfaces, where a full strength bloom would wash the type out.
+class FrostBackdrop extends StatelessWidget {
+  const FrostBackdrop({
+    required this.child,
+    this.borderRadius,
+    this.glow = 0.34,
+    super.key,
+  });
+
+  final Widget child;
+  final BorderRadius? borderRadius;
+  final double glow;
+
+  @override
+  Widget build(BuildContext context) {
+    final surface = CustomPaint(
+      painter: _BackdropPainter(glow: glow),
+      child: child,
+    );
+    if (borderRadius == null) return surface;
+    return ClipRRect(borderRadius: borderRadius!, child: surface);
+  }
+}
+
+class _BackdropPainter extends CustomPainter {
+  const _BackdropPainter({required this.glow});
+
+  final double glow;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    FrostGradients.paintLayers(canvas, Offset.zero & size, glow: glow);
+  }
+
+  @override
+  bool shouldRepaint(covariant _BackdropPainter oldDelegate) =>
+      oldDelegate.glow != glow;
+}
+
+/// Mark plus wordmark lockup.
+class FrostLockup extends StatelessWidget {
+  const FrostLockup({this.markSize = 40, this.onBrand = true, super.key});
+
+  final double markSize;
+  final bool onBrand;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.tokens;
+    return Semantics(
+      label: 'FrostBank',
+      child: ExcludeSemantics(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FrostMark(size: markSize),
+            SizedBox(width: markSize * 0.3),
+            Text(
+              'FrostBank',
+              style: AppType.headlineMedium.copyWith(
+                fontSize: markSize * 0.52,
+                color: onBrand ? Colors.white : tokens.textPrimary,
+                letterSpacing: -0.4,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Frosted glass surface used on brand backdrops. Falls back to a solid fill
+/// when the platform asks for reduced transparency.
+class GlassPanel extends StatelessWidget {
+  const GlassPanel({
+    required this.child,
+    this.padding = const EdgeInsets.all(Space.x5),
+    this.radius = AppRadius.xl,
+    this.tint = 0.1,
+    super.key,
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final double radius;
+  final double tint;
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceTransparency =
+        MediaQuery.maybeOf(context)?.highContrast ?? false;
+    final border = BorderRadius.circular(radius);
+
+    final content = DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: border,
+        color: Colors.white.withValues(alpha: reduceTransparency ? 0.22 : tint),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+        boxShadow: [
+          BoxShadow(
+            color: Palette.frostInk.withValues(alpha: 0.24),
+            blurRadius: 28,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Padding(padding: padding, child: child),
+    );
+
+    if (reduceTransparency) return content;
+
+    return ClipRRect(
+      borderRadius: border,
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: content,
+      ),
+    );
+  }
+}
+
+/// Small frosted control on a brand backdrop, sized for a 48 pixel target.
+class GlassIconButton extends StatelessWidget {
+  const GlassIconButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.badge = false,
+    super.key,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool badge;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: label,
+    child: ExcludeSemantics(
+      child: SizedBox.square(
+        dimension: Layout.minTapTarget,
+        child: Material(
+          color: Colors.white.withValues(alpha: 0.12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            side: BorderSide(color: Colors.white.withValues(alpha: 0.24)),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Icon(icon, color: Colors.white, size: 20),
+                if (badge)
+                  Positioned(
+                    top: 12,
+                    right: 12,
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: Palette.frostIceBlue,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Palette.frostBaseTop,
+                          width: 1.5,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+/// Text field for brand backdrops.
+///
+/// The entered value is explicitly white here, because these fields sit on the
+/// dark brand surface in both light and dark mode.
+class FrostField extends StatelessWidget {
+  const FrostField({
+    required this.controller,
+    required this.hint,
+    this.obscure = false,
+    this.suffix,
+    this.keyboardType,
+    this.textInputAction,
+    this.onSubmitted,
+    this.autofillHints,
+    super.key,
+  });
+
+  final TextEditingController controller;
+  final String hint;
+  final bool obscure;
+  final Widget? suffix;
+  final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
+  final Iterable<String>? autofillHints;
+
+  @override
+  Widget build(BuildContext context) {
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.22)),
+    );
+
+    return TextField(
+      controller: controller,
+      obscureText: obscure,
+      keyboardType: keyboardType,
+      textInputAction: textInputAction,
+      onSubmitted: onSubmitted,
+      autofillHints: autofillHints,
+      cursorColor: Colors.white,
+      style: AppType.bodyLarge.copyWith(color: Colors.white),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: AppType.bodyMedium.copyWith(
+          color: Colors.white.withValues(alpha: 0.56),
+        ),
+        filled: true,
+        fillColor: Colors.white.withValues(alpha: 0.1),
+        suffixIcon: suffix,
+        suffixIconColor: Colors.white.withValues(alpha: 0.72),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: Space.x4,
+          vertical: Space.x4,
+        ),
+        border: border,
+        enabledBorder: border,
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          borderSide: const BorderSide(color: Palette.frostIcePale, width: 2),
+        ),
+      ),
+    );
+  }
+}
+
+/// Field label used above every brand surface input.
+class FrostFieldLabel extends StatelessWidget {
+  const FrostFieldLabel(this.text, {super.key});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: Space.x2),
+    child: Text(
+      text,
+      style: AppType.labelMedium.copyWith(
+        color: Colors.white.withValues(alpha: 0.78),
+      ),
+    ),
+  );
+}
+
+/// Payment card face. Built on the Card gradient token, with a navy scrim and a
+/// single sheen so the surface reads as cold metal rather than neon.
+class FrostCardSurface extends StatelessWidget {
+  const FrostCardSurface({
+    required this.child,
+    this.radius = AppRadius.xl,
+    this.padding = const EdgeInsets.all(Space.x5),
+    super.key,
+  });
+
+  final Widget child;
+  final double radius;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.tokens;
+    final border = BorderRadius.circular(radius);
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: border,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: tokens.gradientCard,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Palette.frostInk.withValues(alpha: 0.3),
+            blurRadius: 26,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: border,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    stops: const [0, 0.62, 1],
+                    colors: [
+                      Palette.frostBaseTop.withValues(alpha: 0.94),
+                      Palette.frostLift.withValues(alpha: 0.52),
+                      Palette.frostIceBlue.withValues(alpha: 0.1),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: -60,
+              right: -40,
+              child: Container(
+                width: 190,
+                height: 190,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      Palette.frostIcePale.withValues(alpha: 0.34),
+                      Palette.frostIcePale.withValues(alpha: 0),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: border,
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.16),
+                  ),
+                ),
+              ),
+            ),
+            Padding(padding: padding, child: child),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Card and tile surface for the light content sheet. Uses soft tinted
+/// elevation instead of a hard one pixel border.
+class SoftCard extends StatelessWidget {
+  const SoftCard({
+    required this.child,
+    this.padding = const EdgeInsets.all(Space.x4),
+    this.radius = AppRadius.lg,
+    super.key,
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.tokens;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: tokens.surfaceRaised,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(
+          color: tokens.isDark ? tokens.border : tokens.border.withValues(alpha: 0.5),
+        ),
+        boxShadow: [
+          BoxShadow(color: tokens.shadow, blurRadius: 18, offset: const Offset(0, 8)),
+        ],
+      ),
+      child: Padding(padding: padding, child: child),
+    );
+  }
+}

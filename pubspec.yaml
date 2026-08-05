@@ -1,5 +1,5 @@
 name: mobile_bank_app
-description: "A new Flutter project."
+description: "FrostBank Mobile, an offline Flutter banking application backed by a mock repository layer."
 publish_to: 'none'
 version: 0.1.0+1
 
@@ -9,6 +9,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_riverpod: ^3.4.2
+  go_router: ^17.4.0
+  intl: ^0.20.3
 
 dev_dependencies:
   flutter_test:
@@ -17,3 +20,14 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  fonts:
+    - family: Outfit
+      fonts:
+        - asset: assets/fonts/Outfit.ttf
+    - family: Geist
+      fonts:
+        - asset: assets/fonts/Geist.ttf
+    - family: GeistMono
+      fonts:
+        - asset: assets/fonts/GeistMono.ttf

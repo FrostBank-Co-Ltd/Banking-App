@@ -1,0 +1,826 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../core/design/motion.dart';
+import '../../core/design/tokens.dart';
+import '../../core/design/typography.dart';
+import '../../core/format/money.dart';
+import '../../domain/models.dart';
+import '../../state/providers.dart';
+import '../widgets/brand.dart';
+import '../widgets/money_text.dart';
+import '../widgets/pressable.dart';
+import '../widgets/states.dart';
+import '../widgets/surfaces.dart';
+import '../widgets/transaction_list.dart';
+
+/// Authenticated home. Gradient top region over a rounded sheet that carries
+/// quick actions, the Finance Hub, recent activity, and offers.
+class DashboardScreen extends ConsumerWidget {
+  const DashboardScreen({super.key});
+
+  Future<void> _refresh(WidgetRef ref) async {
+    ref.invalidate(accountsProvider);
+    ref.invalidate(cardsProvider);
+    ref.invalidate(promosProvider);
+    ref.invalidate(transactionsProvider);
+    await ref.read(accountsProvider.future);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = context.tokens;
+
+    return Scaffold(
+      backgroundColor: tokens.backgroundAlt,
+      body: RefreshIndicator(
+        onRefresh: () => _refresh(ref),
+        color: tokens.accent,
+        child: ResponsiveShell(
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _TopRegion(),
+                Transform.translate(
+                  offset: const Offset(0, -Space.x6),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: tokens.backgroundAlt,
+                      borderRadius: BorderRadius.vertical(
+                        top: Radius.circular(AppRadius.xl),
+                      ),
+                    ),
+                    padding: const EdgeInsets.fromLTRB(
+                      Space.x5,
+                      Space.x6,
+                      Space.x5,
+                      Space.x16 + Space.x8,
+                    ),
+                    child: const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _QuickActions(),
+                        SizedBox(height: Space.x8),
+                        _FinanceHub(),
+                        SizedBox(height: Space.x8),
+                        _RecentTransactions(),
+                        SizedBox(height: Space.x8),
+                        _Offers(),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TopRegion extends ConsumerWidget {
+  const _TopRegion();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = context.tokens;
+    final accounts = ref.watch(accountsProvider);
+    final selected = ref.watch(selectedAccountProvider);
+    final hidden = ref.watch(preferencesProvider).balancesHidden;
+
+    return FrostBackdrop(
+      borderRadius: const BorderRadius.vertical(
+        bottom: Radius.circular(AppRadius.xl),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            Space.x5,
+            Space.x4,
+            Space.x5,
+            Space.x10,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const FrostLockup(markSize: 32),
+                  const Spacer(),
+                  GlassIconButton(
+                    icon: hidden
+                        ? Icons.visibility_off_rounded
+                        : Icons.visibility_rounded,
+                    label: hidden ? 'Show balances' : 'Hide balances',
+                    onTap: () => ref
+                        .read(preferencesProvider.notifier)
+                        .toggleBalanceVisibility(),
+                  ),
+                  const SizedBox(width: Space.x2),
+                  GlassIconButton(
+                    icon: Icons.notifications_none_rounded,
+                    label: 'Notifications',
+                    badge: true,
+                    onTap: () => context.push('/soon/notifications'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: Space.x4),
+              const _SearchField(),
+              const SizedBox(height: Space.x6),
+              AsyncSection<List<Account>>(
+                value: accounts,
+                onRetry: () => ref.invalidate(accountsProvider),
+                skeleton: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    SkeletonBlock(width: 220, height: 34, radius: AppRadius.pill),
+                    SizedBox(height: Space.x6),
+                    SkeletonBlock(width: 200, height: 40),
+                    SizedBox(height: Space.x3),
+                    SkeletonBlock(width: 140, height: 14),
+                  ],
+                ),
+                builder: (rows) {
+                  final active = selected.value;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _AccountChips(accounts: rows),
+                      const SizedBox(height: Space.x6),
+                      if (active != null) ...[
+                        Text(
+                          'Total balance',
+                          style: AppType.labelMedium.copyWith(
+                            color: Colors.white.withValues(alpha: 0.76),
+                          ),
+                        ),
+                        const SizedBox(height: Space.x2),
+                        HeroBalance(
+                          accountName: active.name,
+                          value: active.totalBalance,
+                          currencyCode: active.currencyCode,
+                          color: tokens.textOnBrand,
+                        ),
+                        const SizedBox(height: Space.x2),
+                        Row(
+                          children: [
+                            Text(
+                              'Available ',
+                              style: AppType.bodySmall.copyWith(
+                                color: Colors.white.withValues(alpha: 0.76),
+                              ),
+                            ),
+                            MoneyText(
+                              active.availableBalance,
+                              style: AppType.numericSmall,
+                              color: Colors.white.withValues(alpha: 0.9),
+                              currencyCode: active.currencyCode,
+                              label: '${active.name} available',
+                            ),
+                            if (active.isCrypto &&
+                                active.cryptoQuantity != null) ...[
+                              Text(
+                                '  \u2022  ',
+                                style: AppType.bodySmall.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.5),
+                                ),
+                              ),
+                              NumericText(
+                                Money.quantity(
+                                  active.cryptoQuantity!,
+                                  active.cryptoUnit ?? '',
+                                ),
+                                color: Colors.white.withValues(alpha: 0.9),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                      const SizedBox(height: Space.x6),
+                      const _CardsCarousel(),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SearchField extends ConsumerStatefulWidget {
+  const _SearchField();
+
+  @override
+  ConsumerState<_SearchField> createState() => _SearchFieldState();
+}
+
+class _SearchFieldState extends ConsumerState<_SearchField> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _search(String value) {
+    if (value.trim().isEmpty) return;
+    ref.read(txnFilterProvider.notifier).setQuery(value.trim());
+    context.go('/activity');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // The search field sits on the brand surface, so its text is white rather
+    // than theme coloured.
+    final border = OutlineInputBorder(
+      borderRadius: AppRadius.all(AppRadius.pill),
+      borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+    );
+
+    return TextField(
+      controller: _controller,
+      textInputAction: TextInputAction.search,
+      onSubmitted: _search,
+      cursorColor: Colors.white,
+      style: AppType.bodyMedium.copyWith(color: Colors.white),
+      decoration: InputDecoration(
+        hintText: 'Search transactions',
+        hintStyle: AppType.bodyMedium.copyWith(
+          color: Colors.white.withValues(alpha: 0.56),
+        ),
+        filled: true,
+        fillColor: Colors.white.withValues(alpha: 0.1),
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(vertical: Space.x3),
+        prefixIcon: Icon(
+          Icons.search_rounded,
+          color: Colors.white.withValues(alpha: 0.7),
+          size: 20,
+        ),
+        border: border,
+        enabledBorder: border,
+        focusedBorder: OutlineInputBorder(
+          borderRadius: AppRadius.all(AppRadius.pill),
+          borderSide: const BorderSide(color: Palette.frostIcePale, width: 2),
+        ),
+      ),
+    );
+  }
+}
+
+class _AccountChips extends ConsumerWidget {
+  const _AccountChips({required this.accounts});
+
+  final List<Account> accounts;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final activeId = ref.watch(selectedAccountProvider).value?.id;
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final account in accounts)
+            Padding(
+              padding: const EdgeInsets.only(right: Space.x2),
+              child: _AccountChip(
+                account: account,
+                isActive: account.id == activeId,
+                onTap: () => ref
+                    .read(selectedAccountIdProvider.notifier)
+                    .select(account.id),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AccountChip extends StatelessWidget {
+  const _AccountChip({
+    required this.account,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  final Account account;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.tokens;
+    return Pressable(
+      onTap: onTap,
+      semanticLabel:
+          '${account.name}, ${Money.spoken(account.totalBalance, currencyCode: account.currencyCode)}'
+          '${isActive ? ', selected' : ''}',
+      borderRadius: AppRadius.md,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: Space.x4,
+          vertical: Space.x2,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: isActive ? 0.2 : 0.1),
+          borderRadius: AppRadius.all(AppRadius.md),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: isActive ? 0.44 : 0.2),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              account.shortCode,
+              style: AppType.labelSmall.copyWith(
+                color: Colors.white.withValues(alpha: 0.82),
+              ),
+            ),
+            const SizedBox(height: 2),
+            MoneyText(
+              account.totalBalance,
+              style: AppType.numericSmall,
+              color: Colors.white,
+              currencyCode: account.currencyCode,
+              maskable: true,
+            ),
+            const SizedBox(height: Space.x1),
+            // Hierarchy: the underline marks which account every figure below
+            // belongs to.
+            AnimatedContainer(
+              duration: Motion.resolve(context, Motion.short),
+              curve: Motion.standard,
+              height: 2,
+              width: isActive ? 28 : 0,
+              decoration: BoxDecoration(
+                color: tokens.accent,
+                borderRadius: AppRadius.all(AppRadius.pill),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CardsCarousel extends ConsumerWidget {
+  const _CardsCarousel();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cards = ref.watch(cardsProvider);
+
+    return SizedBox(
+      height: 96,
+      child: AsyncSection<List<BankCard>>(
+        value: cards,
+        onRetry: () => ref.invalidate(cardsProvider),
+        skeleton: Row(
+          children: const [
+            SkeletonBlock(width: 150, height: 92, radius: AppRadius.lg),
+            SizedBox(width: Space.x3),
+            SkeletonBlock(width: 150, height: 92, radius: AppRadius.lg),
+          ],
+        ),
+        builder: (rows) => ListView(
+          scrollDirection: Axis.horizontal,
+          children: [
+            for (final card in rows)
+              Padding(
+                padding: const EdgeInsets.only(right: Space.x3),
+                child: _CardThumb(card: card),
+              ),
+            const _AddCardTile(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CardThumb extends StatelessWidget {
+  const _CardThumb({required this.card});
+
+  final BankCard card;
+
+  @override
+  Widget build(BuildContext context) {
+    return Pressable(
+      onTap: () => context.push('/card/${card.id}'),
+      semanticLabel:
+          '${card.label}, ${card.network.label} ending ${card.last4}, ${card.status.label}',
+      borderRadius: AppRadius.lg,
+      child: SizedBox(
+        width: 176,
+        child: FrostCardSurface(
+          radius: AppRadius.lg,
+          padding: const EdgeInsets.all(Space.x4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    card.network.label,
+                    style: AppType.labelSmall.copyWith(color: Colors.white),
+                  ),
+                  Icon(
+                    card.status == CardStatus.frozen
+                        ? Icons.ac_unit_rounded
+                        : Icons.contactless_rounded,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ],
+              ),
+              NumericText(
+                '\u2022\u2022\u2022\u2022 ${card.last4}',
+                color: Colors.white.withValues(alpha: 0.86),
+              ),
+              MoneyText(
+                card.balance,
+                style: AppType.numericSmall,
+                color: Colors.white,
+                currencyCode: card.currencyCode,
+                label: '${card.label} balance',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AddCardTile extends StatelessWidget {
+  const _AddCardTile();
+
+  @override
+  Widget build(BuildContext context) => Pressable(
+    onTap: () => context.push('/soon/new-card'),
+    semanticLabel: 'Add card',
+    borderRadius: AppRadius.lg,
+    child: Container(
+      width: 104,
+      decoration: BoxDecoration(
+        borderRadius: AppRadius.all(AppRadius.lg),
+        color: Colors.white.withValues(alpha: 0.08),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.24),
+          strokeAlign: BorderSide.strokeAlignInside,
+        ),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.add_rounded,
+            color: Colors.white.withValues(alpha: 0.9),
+          ),
+          const SizedBox(height: Space.x1),
+          Text(
+            'ADD CARD',
+            style: AppType.labelSmall.copyWith(
+              color: Colors.white.withValues(alpha: 0.82),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _QuickActions extends StatelessWidget {
+  const _QuickActions();
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    children: const [
+      _QuickAction(
+        icon: Icons.south_west_rounded,
+        label: 'DEPOSIT',
+        route: '/soon/deposit',
+      ),
+      _QuickAction(
+        icon: Icons.north_east_rounded,
+        label: 'SEND',
+        route: '/soon/send-money',
+      ),
+      _QuickAction(
+        icon: Icons.qr_code_scanner_rounded,
+        label: 'SCAN',
+        route: '/soon/qr-payment',
+      ),
+      _QuickAction(
+        icon: Icons.receipt_long_rounded,
+        label: 'HISTORY',
+        route: '/activity',
+      ),
+    ],
+  );
+}
+
+class _QuickAction extends StatelessWidget {
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.route,
+  });
+
+  final IconData icon;
+  final String label;
+  final String route;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.tokens;
+    final isBranch = route.startsWith('/activity');
+    return Pressable(
+      onTap: () => isBranch ? context.go(route) : context.push(route),
+      semanticLabel: label.toLowerCase(),
+      borderRadius: AppRadius.md,
+      child: SizedBox(
+        width: 76,
+        child: Column(
+          children: [
+            Container(
+              width: 54,
+              height: 54,
+              decoration: BoxDecoration(
+                borderRadius: AppRadius.all(AppRadius.md),
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Palette.frostBaseTop, Palette.frostLift],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: tokens.shadow,
+                    blurRadius: 12,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Icon(icon, color: Colors.white, size: 22),
+            ),
+            const SizedBox(height: Space.x2),
+            Text(
+              label,
+              style: AppType.labelSmall.copyWith(color: tokens.textSecondary),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FinanceHub extends StatelessWidget {
+  const _FinanceHub();
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const SectionHeader(title: 'Finance Hub'),
+      Row(
+        children: const [
+          Expanded(
+            child: HubTile(
+              icon: Icons.savings_rounded,
+              label: 'Savings',
+              route: '/soon/savings',
+            ),
+          ),
+          SizedBox(width: Space.x3),
+          Expanded(
+            child: HubTile(
+              icon: Icons.currency_bitcoin_rounded,
+              label: 'Crypto',
+              route: '/soon/crypto',
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: Space.x3),
+      Row(
+        children: const [
+          Expanded(
+            child: HubTile(
+              icon: Icons.groups_rounded,
+              label: 'Split Bills',
+              route: '/soon/split-bills',
+            ),
+          ),
+          SizedBox(width: Space.x3),
+          Expanded(
+            child: HubTile(
+              icon: Icons.schedule_rounded,
+              label: 'Time Deposit',
+              route: '/soon/time-deposit',
+            ),
+          ),
+        ],
+      ),
+    ],
+  );
+}
+
+/// Finance Hub entry, also reused by the hub branch screen.
+class HubTile extends StatelessWidget {
+  const HubTile({
+    required this.icon,
+    required this.label,
+    required this.route,
+    super.key,
+  });
+
+  final IconData icon;
+  final String label;
+  final String route;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.tokens;
+    return Pressable(
+      onTap: () => context.push(route),
+      semanticLabel: label,
+      borderRadius: AppRadius.lg,
+      child: SoftCard(
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: tokens.interactiveSecondary,
+                borderRadius: AppRadius.all(AppRadius.sm),
+              ),
+              child: Icon(icon, size: 20, color: tokens.accent),
+            ),
+            const SizedBox(width: Space.x3),
+            Expanded(
+              child: Text(
+                label,
+                style: AppType.titleSmall.copyWith(color: tokens.textPrimary),
+                maxLines: 2,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RecentTransactions extends ConsumerWidget {
+  const _RecentTransactions();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final accountId = ref.watch(selectedAccountProvider).value?.id;
+    final rows = ref.watch(transactionsProvider(accountId));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeader(
+          title: 'Transactions',
+          action: TextButton(
+            onPressed: () => context.go('/activity'),
+            child: const Text('View all'),
+          ),
+        ),
+        AsyncSection<List<Txn>>(
+          value: rows,
+          onRetry: () => ref.invalidate(transactionsProvider(accountId)),
+          skeleton: const SkeletonRows(),
+          isEmpty: (data) => data.isEmpty,
+          empty: EmptyStateView(
+            heading: 'No activity yet',
+            message: 'Transactions on this account will appear here.',
+            actionLabel: 'Add funds',
+            icon: Icons.receipt_long_rounded,
+            onAction: () => context.push('/soon/deposit'),
+          ),
+          builder: (data) => GroupedTransactions(
+            rows: data,
+            limit: 8,
+            onSelect: (txn) => context.push('/txn/${txn.id}'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Offers extends ConsumerWidget {
+  const _Offers();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final promos = ref.watch(promosProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionHeader(title: 'Tips and offers'),
+        SizedBox(
+          height: 188,
+          child: AsyncSection<List<Promo>>(
+            value: promos,
+            onRetry: () => ref.invalidate(promosProvider),
+            skeleton: ListView(
+              scrollDirection: Axis.horizontal,
+              children: const [
+                SkeletonBlock(width: 240, height: 180, radius: AppRadius.lg),
+                SizedBox(width: Space.x3),
+                SkeletonBlock(width: 240, height: 180, radius: AppRadius.lg),
+              ],
+            ),
+            builder: (rows) => ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: rows.length,
+              separatorBuilder: (_, _) => const SizedBox(width: Space.x3),
+              itemBuilder: (context, index) {
+                final promo = rows[index];
+                return SizedBox(
+                  width: 262,
+                  child: FrostCardSurface(
+                    radius: AppRadius.lg,
+                    padding: const EdgeInsets.all(Space.x4),
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            promo.title,
+                            style: AppType.titleMedium.copyWith(
+                              color: Colors.white,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: Space.x2),
+                          Expanded(
+                            child: Text(
+                              promo.body,
+                              style: AppType.bodySmall.copyWith(
+                                color: Colors.white.withValues(alpha: 0.86),
+                              ),
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(height: Space.x2),
+                          Pressable(
+                            onTap: () => context.push('/soon/offers'),
+                            semanticLabel: '${promo.actionLabel}, ${promo.title}',
+                            borderRadius: AppRadius.pill,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: Space.x4,
+                                vertical: Space.x2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: AppRadius.all(AppRadius.pill),
+                              ),
+                              child: Text(
+                                promo.actionLabel,
+                                style: AppType.labelMedium.copyWith(
+                                  color: Palette.frostBaseTop,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
