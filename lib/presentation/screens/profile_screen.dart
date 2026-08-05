@@ -116,8 +116,8 @@ class ProfileScreen extends ConsumerWidget {
                 _NavRow(
                   icon: Icons.attach_money_rounded,
                   label: 'Currency display',
-                  value: 'US dollar',
-                  route: '/soon/currency',
+                  value: preferences.activeCurrency.displayName,
+                  route: '/currency',
                 ),
               ],
             ),

@@ -93,6 +93,31 @@ class MockDataSource {
     return match;
   });
 
+  void addTransaction(Txn txn) {
+    _transactions.insert(0, txn);
+  }
+
+  void deductAccountBalance(String accountId, double amount) {
+    final index = _accounts.indexWhere((acc) => acc.id == accountId);
+    if (index != -1) {
+      final old = _accounts[index];
+      final newTotal = (old.totalBalance - amount).clamp(0.0, double.infinity);
+      final newAvail = (old.availableBalance - amount).clamp(0.0, double.infinity);
+      _accounts[index] = Account(
+        id: old.id,
+        name: old.name,
+        shortCode: old.shortCode,
+        kind: old.kind,
+        maskedNumber: old.maskedNumber,
+        currencyCode: old.currencyCode,
+        totalBalance: newTotal,
+        availableBalance: newAvail,
+        cryptoQuantity: old.cryptoQuantity,
+        cryptoUnit: old.cryptoUnit,
+      );
+    }
+  }
+
   Future<List<Promo>> promos() =>
       read('offers', () => List<Promo>.unmodifiable(_promos));
 
