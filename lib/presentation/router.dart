@@ -18,6 +18,11 @@ import 'screens/transaction_detail_screen.dart';
 import 'screens/transaction_history_screen.dart';
 import 'shell/app_shell.dart';
 
+//for routing to deposit, transfer, and qr
+import 'screens/deposit_screen.dart';
+import 'screens/transfer_screen.dart';
+import 'screens/qr_screen.dart';
+
 final _rootKey = GlobalKey<NavigatorState>(debugLabel: 'root');
 
 /// Declarative routes plus one guard. Branch state, including scroll offset,
@@ -72,6 +77,18 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/soon/:feature',
         builder: (_, state) =>
             NotInBuildScreen(feature: state.pathParameters['feature']!),
+      ),
+      GoRoute(
+        path: '/deposit',
+        builder: (_, state) => const DepositScreen(),
+      ),
+      GoRoute(
+        path: '/transfer',
+        builder: (_, state) => const TransferScreen(),
+      ),
+      GoRoute(
+        path: '/qr-scanner',
+        builder: (_, state) => const QRScreen(),
       ),
       StatefulShellRoute.indexedStack(
         builder: (_, _, navigationShell) =>
