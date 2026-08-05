@@ -8,11 +8,13 @@ import 'screens/account_detail_screen.dart';
 import 'screens/card_detail_screen.dart';
 import 'screens/cards_screen.dart';
 import 'screens/dashboard_screen.dart';
+import 'screens/goal_detail_screen.dart';
 import 'screens/hub_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/not_in_build_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/register_screen.dart';
+import 'screens/savings_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/transaction_detail_screen.dart';
 import 'screens/transaction_history_screen.dart';
@@ -67,6 +69,15 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/txn/:id',
         builder: (_, state) =>
             TransactionDetailScreen(txnId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/savings',
+        builder: (_, _) => const SavingsScreen(),
+      ),
+      GoRoute(
+        path: '/savings/:id',
+        builder: (_, state) =>
+            GoalDetailScreen(goalId: state.pathParameters['id']!),
       ),
       GoRoute(
         path: '/soon/:feature',

@@ -159,3 +159,169 @@ final monthFlowProvider = FutureProvider.family<MonthFlow, String>(
     return MonthFlow(inflow: inflow, outflow: outflow);
   },
 );
+
+// ---------------------------------------------------------------------------
+// Savings Goals
+// ---------------------------------------------------------------------------
+
+final savingsGoalRepositoryProvider = Provider<SavingsGoalRepository>(
+  (ref) => MockSavingsGoalRepository(ref.watch(mockDataSourceProvider)),
+);
+
+final goalsProvider = FutureProvider<List<GoalSave>>(
+  (ref) => ref.read(savingsGoalRepositoryProvider).fetchGoals(),
+  retry: noAutomaticRetry,
+);
+
+final goalProvider = FutureProvider.family<GoalSave, String>(
+  (ref, id) => ref.read(savingsGoalRepositoryProvider).fetchGoal(id),
+  retry: noAutomaticRetry,
+);
+
+final goalTransactionsProvider = FutureProvider.family<List<GoalTxn>, String>(
+  (ref, goalId) =>
+      ref.read(savingsGoalRepositoryProvider).fetchGoalTransactions(goalId),
+  retry: noAutomaticRetry,
+);
+
+/// Total balance across all active goal saves.
+final totalSavingsProvider = FutureProvider<double>((ref) async {
+  final goals = await ref.watch(goalsProvider.future);
+  var total = 0.0;
+  for (final g in goals) {
+    if (g.status == GoalSaveStatus.active) total += g.balance;
+  }
+  return total;
+}, retry: noAutomaticRetry);
+
+/// Async state for mutations (open, transfer, close).
+sealed class SavingsActionState {
+  const SavingsActionState();
+}
+
+class SavingsIdle extends SavingsActionState {
+  const SavingsIdle();
+}
+
+class SavingsWorking extends SavingsActionState {
+  const SavingsWorking();
+}
+
+class SavingsSuccess extends SavingsActionState {
+  const SavingsSuccess(this.goal);
+  final GoalSave goal;
+}
+
+class SavingsError extends SavingsActionState {
+  const SavingsError(this.message);
+  final String message;
+}
+
+/// Handles all write operations on goal saves and invalidates read providers
+/// after each successful mutation so the UI reflects the new state.
+class SavingsController extends Notifier<SavingsActionState> {
+  @override
+  SavingsActionState build() => const SavingsIdle();
+
+  SavingsGoalRepository get _repo =>
+      ref.read(savingsGoalRepositoryProvider);
+
+  Future<bool> openGoal({
+    required String name,
+    required String emoji,
+    required double targetAmount,
+    required double initialDeposit,
+  }) async {
+    state = const SavingsWorking();
+    try {
+      final goal = await _repo.openGoal(
+        name: name,
+        emoji: emoji,
+        targetAmount: targetAmount,
+        initialDeposit: initialDeposit,
+      );
+      ref.invalidate(goalsProvider);
+      ref.invalidate(totalSavingsProvider);
+      state = SavingsSuccess(goal);
+      return true;
+    } on RepositoryFailure catch (e) {
+      state = SavingsError(e.message);
+      return false;
+    } catch (_) {
+      state = const SavingsError('Something went wrong. Please try again.');
+      return false;
+    }
+  }
+
+  Future<bool> transferIn({
+    required String goalId,
+    required double amount,
+  }) async {
+    state = const SavingsWorking();
+    try {
+      final goal =
+          await _repo.transferIn(goalId: goalId, amount: amount);
+      ref.invalidate(goalsProvider);
+      ref.invalidate(goalProvider(goalId));
+      ref.invalidate(goalTransactionsProvider(goalId));
+      ref.invalidate(totalSavingsProvider);
+      state = SavingsSuccess(goal);
+      return true;
+    } on RepositoryFailure catch (e) {
+      state = SavingsError(e.message);
+      return false;
+    } catch (_) {
+      state = const SavingsError('Something went wrong. Please try again.');
+      return false;
+    }
+  }
+
+  Future<bool> transferOut({
+    required String goalId,
+    required double amount,
+  }) async {
+    state = const SavingsWorking();
+    try {
+      final goal =
+          await _repo.transferOut(goalId: goalId, amount: amount);
+      ref.invalidate(goalsProvider);
+      ref.invalidate(goalProvider(goalId));
+      ref.invalidate(goalTransactionsProvider(goalId));
+      ref.invalidate(totalSavingsProvider);
+      state = SavingsSuccess(goal);
+      return true;
+    } on RepositoryFailure catch (e) {
+      state = SavingsError(e.message);
+      return false;
+    } catch (_) {
+      state = const SavingsError('Something went wrong. Please try again.');
+      return false;
+    }
+  }
+
+  Future<bool> closeGoal(String goalId) async {
+    state = const SavingsWorking();
+    try {
+      final goal = await _repo.closeGoal(goalId);
+      ref.invalidate(goalsProvider);
+      ref.invalidate(goalProvider(goalId));
+      ref.invalidate(goalTransactionsProvider(goalId));
+      ref.invalidate(totalSavingsProvider);
+      state = SavingsSuccess(goal);
+      return true;
+    } on RepositoryFailure catch (e) {
+      state = SavingsError(e.message);
+      return false;
+    } catch (_) {
+      state = const SavingsError('Something went wrong. Please try again.');
+      return false;
+    }
+  }
+
+  void reset() => state = const SavingsIdle();
+}
+
+final savingsControllerProvider =
+    NotifierProvider<SavingsController, SavingsActionState>(
+  SavingsController.new,
+);
