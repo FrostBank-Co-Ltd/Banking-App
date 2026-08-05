@@ -95,6 +95,192 @@ abstract final class MockSeed {
     ),
   ];
 
+  /// Daily interest rate used for every seeded goal save.
+  /// 0.011918% per day ≈ 4.35% APY.
+  static const double goalDailyRate = 0.011918;
+
+  /// Mock data: three goal saves with varying balances and targets.
+  static List<GoalSave> goalSaves({DateTime? now}) {
+    final ref = now ?? DateTime.now();
+    return [
+      GoalSave(
+        id: 'goal_emergency',
+        name: 'Emergency Fund',
+        emoji: 'shield',
+        targetAmount: 10000.00,
+        balance: 6420.50, // mock data
+        currencyCode: 'USD',
+        dailyRatePercent: goalDailyRate,
+        interestEarned: 28.14, // mock data
+        createdAt: ref.subtract(const Duration(days: 198)),
+        status: GoalSaveStatus.active,
+      ),
+      GoalSave(
+        id: 'goal_europe',
+        name: 'Europe Trip',
+        emoji: 'flight',
+        targetAmount: 5000.00,
+        balance: 1875.30, // mock data
+        currencyCode: 'USD',
+        dailyRatePercent: goalDailyRate,
+        interestEarned: 4.82, // mock data
+        createdAt: ref.subtract(const Duration(days: 47)),
+        status: GoalSaveStatus.active,
+      ),
+      GoalSave(
+        id: 'goal_gadget',
+        name: 'New Laptop',
+        emoji: 'laptop',
+        targetAmount: 2200.00,
+        balance: 2200.00, // mock data — goal met
+        currencyCode: 'USD',
+        dailyRatePercent: goalDailyRate,
+        interestEarned: 9.36, // mock data
+        createdAt: ref.subtract(const Duration(days: 120)),
+        status: GoalSaveStatus.active,
+      ),
+    ];
+  }
+
+  /// Mock data: goal save transaction ledger for every seeded goal.
+  static List<GoalTxn> goalTransactions({DateTime? now}) {
+    final ref = now ?? DateTime.now();
+
+    DateTime ago(int days, {int hour = 10, int minute = 0}) => DateTime(
+          ref.year,
+          ref.month,
+          ref.day,
+          hour,
+          minute,
+        ).subtract(Duration(days: days));
+
+    return [
+      // Emergency Fund
+      GoalTxn(
+        id: 'gtxn_001',
+        goalId: 'goal_emergency',
+        kind: GoalTxnKind.transferIn,
+        amount: 5000.00,
+        runningBalance: 5000.00,
+        date: ago(198),
+        note: 'Initial deposit',
+      ),
+      GoalTxn(
+        id: 'gtxn_002',
+        goalId: 'goal_emergency',
+        kind: GoalTxnKind.interest,
+        amount: 0.60,
+        runningBalance: 5000.60,
+        date: ago(197),
+      ),
+      GoalTxn(
+        id: 'gtxn_003',
+        goalId: 'goal_emergency',
+        kind: GoalTxnKind.transferIn,
+        amount: 1400.00,
+        runningBalance: 6400.60,
+        date: ago(90),
+        note: 'Top up',
+      ),
+      GoalTxn(
+        id: 'gtxn_004',
+        goalId: 'goal_emergency',
+        kind: GoalTxnKind.interest,
+        amount: 19.90,
+        runningBalance: 6420.50,
+        date: ago(1, hour: 0, minute: 5),
+        note: 'Daily interest',
+      ),
+      // Europe Trip
+      GoalTxn(
+        id: 'gtxn_005',
+        goalId: 'goal_europe',
+        kind: GoalTxnKind.transferIn,
+        amount: 1000.00,
+        runningBalance: 1000.00,
+        date: ago(47),
+        note: 'Initial deposit',
+      ),
+      GoalTxn(
+        id: 'gtxn_006',
+        goalId: 'goal_europe',
+        kind: GoalTxnKind.interest,
+        amount: 0.12,
+        runningBalance: 1000.12,
+        date: ago(46),
+      ),
+      GoalTxn(
+        id: 'gtxn_007',
+        goalId: 'goal_europe',
+        kind: GoalTxnKind.transferIn,
+        amount: 875.00,
+        runningBalance: 1875.12,
+        date: ago(20),
+        note: 'Monthly save',
+      ),
+      GoalTxn(
+        id: 'gtxn_008',
+        goalId: 'goal_europe',
+        kind: GoalTxnKind.interest,
+        amount: 0.18,
+        runningBalance: 1875.30,
+        date: ago(1, hour: 0, minute: 5),
+        note: 'Daily interest',
+      ),
+      // New Laptop
+      GoalTxn(
+        id: 'gtxn_009',
+        goalId: 'goal_gadget',
+        kind: GoalTxnKind.transferIn,
+        amount: 1000.00,
+        runningBalance: 1000.00,
+        date: ago(120),
+        note: 'Initial deposit',
+      ),
+      GoalTxn(
+        id: 'gtxn_010',
+        goalId: 'goal_gadget',
+        kind: GoalTxnKind.transferIn,
+        amount: 1200.00,
+        runningBalance: 2200.00,
+        date: ago(60),
+        note: 'Goal top up',
+      ),
+      GoalTxn(
+        id: 'gtxn_011',
+        goalId: 'goal_gadget',
+        kind: GoalTxnKind.interest,
+        amount: 9.36,
+        runningBalance: 2200.00,
+        date: ago(1, hour: 0, minute: 5),
+        note: 'Daily interest',
+      ),
+    ];
+  }
+  /// The pairs the Crypto screen tracks.
+  ///
+  /// Not mock data: these are real Twelve Data symbols and their prices come
+  /// from the live service. The list is deliberately short because the free plan
+  /// charges one credit per symbol per refresh.
+  static const List<CryptoAsset> cryptoAssets = [
+    CryptoAsset(code: 'BTC', name: 'Bitcoin', quote: 'USD'),
+    CryptoAsset(code: 'ETH', name: 'Ethereum', quote: 'USD'),
+    CryptoAsset(code: 'SOL', name: 'Solana', quote: 'USD'),
+    CryptoAsset(code: 'XRP', name: 'XRP', quote: 'USD'),
+    CryptoAsset(code: 'LTC', name: 'Litecoin', quote: 'USD'),
+  ];
+
+  /// Mock data: units held, keyed by asset code. The ledger is mock, the price
+  /// applied to it is live, so the portfolio figure is a real valuation of a
+  /// made up position. A zero means the pair is tracked but not held.
+  static const Map<String, double> cryptoHoldings = {
+    'BTC': 0.14382, // mock data
+    'ETH': 1.28740, // mock data
+    'SOL': 24.5, // mock data
+    'XRP': 0,
+    'LTC': 0,
+  };
+
   /// Mock data: promotions reference a named offer with a concrete benefit.
   static const List<Promo> promos = [
     Promo(

@@ -28,6 +28,15 @@ abstract final class Dates {
 
   static String monthYear(DateTime value) => _monthYear.format(value);
 
+  static final DateFormat _clock = DateFormat('HH:mm', 'en_US');
+  static final DateFormat _monthDay = DateFormat('d MMM', 'en_US');
+
+  /// Axis stamp for an intraday chart span.
+  static String clock(DateTime value) => _clock.format(value);
+
+  /// Axis stamp for a chart span measured in days or longer.
+  static String monthDay(DateTime value) => _monthDay.format(value);
+
   static String relative(DateTime value, {DateTime? now}) {
     final reference = now ?? DateTime.now();
     final gap = reference.difference(value);

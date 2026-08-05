@@ -59,6 +59,50 @@ class MockProfileRepository implements ProfileRepository {
   Future<UserProfile> fetchProfile() => _source.profile();
 }
 
+class MockSavingsGoalRepository implements SavingsGoalRepository {
+  const MockSavingsGoalRepository(this._source);
+
+  final MockDataSource _source;
+
+  @override
+  Future<List<GoalSave>> fetchGoals() => _source.goals();
+
+  @override
+  Future<GoalSave> fetchGoal(String id) => _source.goal(id);
+
+  @override
+  Future<GoalSave> openGoal({
+    required String name,
+    required String emoji,
+    required double targetAmount,
+    required double initialDeposit,
+  }) => _source.openGoal(
+        name: name,
+        emoji: emoji,
+        targetAmount: targetAmount,
+        initialDeposit: initialDeposit,
+      );
+
+  @override
+  Future<GoalSave> transferIn({
+    required String goalId,
+    required double amount,
+  }) => _source.transferIn(goalId: goalId, amount: amount);
+
+  @override
+  Future<GoalSave> transferOut({
+    required String goalId,
+    required double amount,
+  }) => _source.transferOut(goalId: goalId, amount: amount);
+
+  @override
+  Future<GoalSave> closeGoal(String id) => _source.closeGoal(id);
+
+  @override
+  Future<List<GoalTxn>> fetchGoalTransactions(String goalId) =>
+      _source.goalTransactions(goalId);
+}
+
 class MockAuthRepository implements AuthRepository {
   const MockAuthRepository(this._source);
 

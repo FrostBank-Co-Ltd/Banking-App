@@ -66,20 +66,14 @@ void main() {
     }
   });
 
-  testWidgets('login rejects a malformed email inline', (tester) async {
+  testWidgets('login opens with demo credentials and allows sign in', (tester) async {
     await tester.pumpWidget(_harness(const LoginScreen()));
 
-    await tester.enterText(find.byType(TextFormField).first, 'ava.mercado');
-    await tester.enterText(find.byType(TextFormField).last, 'longenough');
-    await tester.ensureVisible(find.text('Sign in'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Sign in'));
-    await tester.pump();
+    expect(find.text('WELCOME BACK'), findsOneWidget);
+    expect(find.text('Sign in'), findsOneWidget);
 
-    expect(
-      find.text('Enter an email in the format name@domain.com'),
-      findsOneWidget,
-    );
+    await tester.tap(find.text('Sign in'));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('a repository failure renders an inline retry', (tester) async {

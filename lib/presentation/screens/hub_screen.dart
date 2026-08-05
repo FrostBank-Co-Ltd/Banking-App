@@ -84,7 +84,7 @@ class HubScreen extends ConsumerWidget {
                   child: HubTile(
                     icon: Icons.savings_rounded,
                     label: 'Savings',
-                    route: '/soon/savings',
+                    route: '/savings',
                   ),
                 ),
                 SizedBox(width: Space.x3),
@@ -92,7 +92,7 @@ class HubScreen extends ConsumerWidget {
                   child: HubTile(
                     icon: Icons.currency_bitcoin_rounded,
                     label: 'Crypto',
-                    route: '/soon/crypto',
+                    route: '/crypto',
                   ),
                 ),
               ],
@@ -104,7 +104,7 @@ class HubScreen extends ConsumerWidget {
                   child: HubTile(
                     icon: Icons.groups_rounded,
                     label: 'Split Bills',
-                    route: '/soon/split-bills',
+                    route: '/split-bills',
                   ),
                 ),
                 SizedBox(width: Space.x3),

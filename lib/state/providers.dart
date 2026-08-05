@@ -1,8 +1,15 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:async';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
+
+import '../core/supabase_config.dart';
 import '../data/mock_data_source.dart';
 import '../data/mock_repositories.dart';
 import '../domain/models.dart';
+import '../data/mock_seed.dart';
+import '../data/twelve_data_market_repository.dart';
+import '../data/supabase_repositories.dart';
 import '../domain/repositories.dart';
 import 'preferences_controller.dart';
 import 'session_controller.dart';
@@ -13,34 +20,82 @@ import 'txn_filter.dart';
 /// belongs to the user here, through the retry control in the error state.
 Duration? noAutomaticRetry(int retryCount, Object error) => null;
 
+/// Controls whether the app uses Supabase or offline Mock repositories.
+final useSupabaseProvider = NotifierProvider<UseSupabaseNotifier, bool>(
+  UseSupabaseNotifier.new,
+);
+
+class UseSupabaseNotifier extends Notifier<bool> {
+  @override
+  bool build() => SupabaseConfig.isInitialized;
+
+  void toggle() => state = !state;
+  void setUseSupabase(bool value) => state = value;
+}
+
 /// Data source and repositories. Override [mockDataSourceProvider] in tests to
 /// seed a different world or to remove latency.
 final mockDataSourceProvider = Provider<MockDataSource>(
   (ref) => MockDataSource(),
 );
 
-final accountRepositoryProvider = Provider<AccountRepository>(
-  (ref) => MockAccountRepository(ref.watch(mockDataSourceProvider)),
-);
+final accountRepositoryProvider = Provider<AccountRepository>((ref) {
+  final useSupabase = ref.watch(useSupabaseProvider);
+  if (useSupabase && SupabaseConfig.isInitialized) {
+    return SupabaseAccountRepository();
+  }
+  return MockAccountRepository(ref.watch(mockDataSourceProvider));
+});
 
-final cardRepositoryProvider = Provider<CardRepository>(
-  (ref) => MockCardRepository(ref.watch(mockDataSourceProvider)),
-);
+final cardRepositoryProvider = Provider<CardRepository>((ref) {
+  final useSupabase = ref.watch(useSupabaseProvider);
+  if (useSupabase && SupabaseConfig.isInitialized) {
+    return SupabaseCardRepository();
+  }
+  return MockCardRepository(ref.watch(mockDataSourceProvider));
+});
 
-final transactionRepositoryProvider = Provider<TransactionRepository>(
-  (ref) => MockTransactionRepository(ref.watch(mockDataSourceProvider)),
-);
+final transactionRepositoryProvider = Provider<TransactionRepository>((ref) {
+  final useSupabase = ref.watch(useSupabaseProvider);
+  if (useSupabase && SupabaseConfig.isInitialized) {
+    return SupabaseTransactionRepository();
+  }
+  return MockTransactionRepository(ref.watch(mockDataSourceProvider));
+});
 
-final promoRepositoryProvider = Provider<PromoRepository>(
-  (ref) => MockPromoRepository(ref.watch(mockDataSourceProvider)),
-);
+final promoRepositoryProvider = Provider<PromoRepository>((ref) {
+  final useSupabase = ref.watch(useSupabaseProvider);
+  if (useSupabase && SupabaseConfig.isInitialized) {
+    return SupabasePromoRepository();
+  }
+  return MockPromoRepository(ref.watch(mockDataSourceProvider));
+});
 
-final profileRepositoryProvider = Provider<ProfileRepository>(
-  (ref) => MockProfileRepository(ref.watch(mockDataSourceProvider)),
-);
+final profileRepositoryProvider = Provider<ProfileRepository>((ref) {
+  final useSupabase = ref.watch(useSupabaseProvider);
+  if (useSupabase && SupabaseConfig.isInitialized) {
+    return SupabaseProfileRepository();
+  }
+  return MockProfileRepository(ref.watch(mockDataSourceProvider));
+});
 
 final authRepositoryProvider = Provider<AuthRepository>(
   (ref) => MockAuthRepository(ref.watch(mockDataSourceProvider)),
+);
+
+/// The one outbound HTTP client. Override in tests with a mock client so no test
+/// ever touches the network.
+final httpClientProvider = Provider<http.Client>((ref) {
+  final client = http.Client();
+  ref.onDispose(client.close);
+  return client;
+});
+
+/// Live market data. Unlike the repositories above, this one has no mock
+/// counterpart: it is always the real service, because a made up price on a
+/// screen labelled live would be a lie.
+final marketRepositoryProvider = Provider<MarketRepository>(
+  (ref) => TwelveDataMarketRepository(client: ref.watch(httpClientProvider)),
 );
 
 /// Application state.
@@ -133,6 +188,97 @@ final accountCardsProvider = FutureProvider.family<List<BankCard>, String>(
   },
 );
 
+/// The pairs the Crypto screen tracks.
+final cryptoAssetsProvider = Provider<List<CryptoAsset>>(
+  (ref) => MockSeed.cryptoAssets,
+);
+
+final cryptoAssetProvider = Provider.family<CryptoAsset?, String>(
+  (ref, code) => ref
+      .watch(cryptoAssetsProvider)
+      .where((asset) => asset.code.toUpperCase() == code.toUpperCase())
+      .firstOrNull,
+);
+
+/// Live quotes for every tracked pair.
+///
+/// Auto disposed and kept on a timer, so prices stay current while the Crypto
+/// screen is open and stop costing credits the moment it is closed. One refresh
+/// spends one credit per symbol, so the period is set well inside the free
+/// plan's budget.
+final cryptoQuotesProvider = FutureProvider.autoDispose<List<CryptoQuote>>((
+  ref,
+) async {
+  final repository = ref.watch(marketRepositoryProvider);
+  final assets = ref.watch(cryptoAssetsProvider);
+
+  final timer = Timer.periodic(
+    const Duration(seconds: 45),
+    (_) => ref.invalidateSelf(),
+  );
+  ref.onDispose(timer.cancel);
+
+  return repository.fetchCryptoQuotes(assets);
+});
+
+/// Live quote for one pair, read off the same batch call the list uses so
+/// opening a pair costs no extra credits.
+final cryptoQuoteProvider = Provider.autoDispose
+    .family<AsyncValue<CryptoQuote?>, String>(
+      (ref, code) => ref.watch(cryptoQuotesProvider).whenData(
+        (quotes) => quotes
+            .where((quote) => quote.code.toUpperCase() == code.toUpperCase())
+            .firstOrNull,
+      ),
+    );
+
+/// Units held in one pair. Ledger data, so mock in this build.
+final cryptoHoldingProvider = Provider.family<double, String>(
+  (ref, code) => MockSeed.cryptoHoldings[code.toUpperCase()] ?? 0,
+);
+
+/// Every tracked pair paired with the position held in it, held pairs first and
+/// then by value.
+final cryptoPositionsProvider =
+    Provider.autoDispose<AsyncValue<List<CryptoPosition>>>((ref) {
+      return ref.watch(cryptoQuotesProvider).whenData((quotes) {
+        final positions = [
+          for (final quote in quotes)
+            CryptoPosition(
+              quote: quote,
+              quantity: ref.watch(cryptoHoldingProvider(quote.code)),
+            ),
+        ]..sort((a, b) {
+          if (a.isHeld != b.isHeld) return a.isHeld ? -1 : 1;
+          return b.value.compareTo(a.value);
+        });
+        return positions;
+      });
+    });
+
+/// Live valuation of the mock crypto ledger.
+final cryptoPortfolioProvider = Provider.autoDispose<AsyncValue<CryptoPortfolio>>(
+  (ref) => ref.watch(cryptoPositionsProvider).whenData(CryptoPortfolio.of),
+);
+
+/// One pair over one span. A record, so the family key compares structurally and
+/// each span is cached separately.
+typedef CryptoSeriesQuery = ({String code, ChartRange range});
+
+/// Bars for one pair over one span. Auto disposed, so leaving the screen stops
+/// the span being held in memory, and each span is fetched at most once inside
+/// the repository's cache window.
+final cryptoSeriesProvider = FutureProvider.autoDispose
+    .family<CryptoSeries, CryptoSeriesQuery>((ref, query) async {
+      final asset = ref.watch(cryptoAssetProvider(query.code));
+      if (asset == null) {
+        throw RepositoryFailure('${query.code} is not a tracked pair.');
+      }
+      return ref
+          .watch(marketRepositoryProvider)
+          .fetchCryptoSeries(asset, query.range);
+    });
+
 /// Inflow and outflow totals for the current calendar month.
 class MonthFlow {
   const MonthFlow({required this.inflow, required this.outflow});
@@ -158,4 +304,170 @@ final monthFlowProvider = FutureProvider.family<MonthFlow, String>(
     }
     return MonthFlow(inflow: inflow, outflow: outflow);
   },
+);
+
+// ---------------------------------------------------------------------------
+// Savings Goals
+// ---------------------------------------------------------------------------
+
+final savingsGoalRepositoryProvider = Provider<SavingsGoalRepository>(
+  (ref) => MockSavingsGoalRepository(ref.watch(mockDataSourceProvider)),
+);
+
+final goalsProvider = FutureProvider<List<GoalSave>>(
+  (ref) => ref.read(savingsGoalRepositoryProvider).fetchGoals(),
+  retry: noAutomaticRetry,
+);
+
+final goalProvider = FutureProvider.family<GoalSave, String>(
+  (ref, id) => ref.read(savingsGoalRepositoryProvider).fetchGoal(id),
+  retry: noAutomaticRetry,
+);
+
+final goalTransactionsProvider = FutureProvider.family<List<GoalTxn>, String>(
+  (ref, goalId) =>
+      ref.read(savingsGoalRepositoryProvider).fetchGoalTransactions(goalId),
+  retry: noAutomaticRetry,
+);
+
+/// Total balance across all active goal saves.
+final totalSavingsProvider = FutureProvider<double>((ref) async {
+  final goals = await ref.watch(goalsProvider.future);
+  var total = 0.0;
+  for (final g in goals) {
+    if (g.status == GoalSaveStatus.active) total += g.balance;
+  }
+  return total;
+}, retry: noAutomaticRetry);
+
+/// Async state for mutations (open, transfer, close).
+sealed class SavingsActionState {
+  const SavingsActionState();
+}
+
+class SavingsIdle extends SavingsActionState {
+  const SavingsIdle();
+}
+
+class SavingsWorking extends SavingsActionState {
+  const SavingsWorking();
+}
+
+class SavingsSuccess extends SavingsActionState {
+  const SavingsSuccess(this.goal);
+  final GoalSave goal;
+}
+
+class SavingsError extends SavingsActionState {
+  const SavingsError(this.message);
+  final String message;
+}
+
+/// Handles all write operations on goal saves and invalidates read providers
+/// after each successful mutation so the UI reflects the new state.
+class SavingsController extends Notifier<SavingsActionState> {
+  @override
+  SavingsActionState build() => const SavingsIdle();
+
+  SavingsGoalRepository get _repo =>
+      ref.read(savingsGoalRepositoryProvider);
+
+  Future<bool> openGoal({
+    required String name,
+    required String emoji,
+    required double targetAmount,
+    required double initialDeposit,
+  }) async {
+    state = const SavingsWorking();
+    try {
+      final goal = await _repo.openGoal(
+        name: name,
+        emoji: emoji,
+        targetAmount: targetAmount,
+        initialDeposit: initialDeposit,
+      );
+      ref.invalidate(goalsProvider);
+      ref.invalidate(totalSavingsProvider);
+      state = SavingsSuccess(goal);
+      return true;
+    } on RepositoryFailure catch (e) {
+      state = SavingsError(e.message);
+      return false;
+    } catch (_) {
+      state = const SavingsError('Something went wrong. Please try again.');
+      return false;
+    }
+  }
+
+  Future<bool> transferIn({
+    required String goalId,
+    required double amount,
+  }) async {
+    state = const SavingsWorking();
+    try {
+      final goal =
+          await _repo.transferIn(goalId: goalId, amount: amount);
+      ref.invalidate(goalsProvider);
+      ref.invalidate(goalProvider(goalId));
+      ref.invalidate(goalTransactionsProvider(goalId));
+      ref.invalidate(totalSavingsProvider);
+      state = SavingsSuccess(goal);
+      return true;
+    } on RepositoryFailure catch (e) {
+      state = SavingsError(e.message);
+      return false;
+    } catch (_) {
+      state = const SavingsError('Something went wrong. Please try again.');
+      return false;
+    }
+  }
+
+  Future<bool> transferOut({
+    required String goalId,
+    required double amount,
+  }) async {
+    state = const SavingsWorking();
+    try {
+      final goal =
+          await _repo.transferOut(goalId: goalId, amount: amount);
+      ref.invalidate(goalsProvider);
+      ref.invalidate(goalProvider(goalId));
+      ref.invalidate(goalTransactionsProvider(goalId));
+      ref.invalidate(totalSavingsProvider);
+      state = SavingsSuccess(goal);
+      return true;
+    } on RepositoryFailure catch (e) {
+      state = SavingsError(e.message);
+      return false;
+    } catch (_) {
+      state = const SavingsError('Something went wrong. Please try again.');
+      return false;
+    }
+  }
+
+  Future<bool> closeGoal(String goalId) async {
+    state = const SavingsWorking();
+    try {
+      final goal = await _repo.closeGoal(goalId);
+      ref.invalidate(goalsProvider);
+      ref.invalidate(goalProvider(goalId));
+      ref.invalidate(goalTransactionsProvider(goalId));
+      ref.invalidate(totalSavingsProvider);
+      state = SavingsSuccess(goal);
+      return true;
+    } on RepositoryFailure catch (e) {
+      state = SavingsError(e.message);
+      return false;
+    } catch (_) {
+      state = const SavingsError('Something went wrong. Please try again.');
+      return false;
+    }
+  }
+
+  void reset() => state = const SavingsIdle();
+}
+
+final savingsControllerProvider =
+    NotifierProvider<SavingsController, SavingsActionState>(
+  SavingsController.new,
 );
