@@ -8,13 +8,15 @@ import '../../core/design/tokens.dart';
 import '../../core/design/typography.dart';
 import '../../domain/models.dart';
 import '../../state/providers.dart';
-import '../widgets/brand.dart';
+import '../widgets/card_carousel.dart';
+import '../widgets/card_face.dart';
 import '../widgets/money_text.dart';
+import '../widgets/motion_effects.dart';
 import '../widgets/states.dart';
 import '../widgets/surfaces.dart';
 
-/// Card detail with a tall card face showing the brand mark, a page dot
-/// indicator, the card balance, and the card info section.
+/// Card detail. The deck at the top, the balance of whichever card faces the
+/// holder, and that card's details below.
 class CardDetailScreen extends ConsumerStatefulWidget {
   const CardDetailScreen({required this.cardId, super.key});
 
@@ -25,14 +27,8 @@ class CardDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _CardDetailScreenState extends ConsumerState<CardDetailScreen> {
-  PageController? _pages;
   int? _index;
-
-  @override
-  void dispose() {
-    _pages?.dispose();
-    super.dispose();
-  }
+  bool _revealed = false;
 
   Future<void> _copy(BankCard card) async {
     await Clipboard.setData(
@@ -52,23 +48,26 @@ class _CardDetailScreenState extends ConsumerState<CardDetailScreen> {
     final cards = ref.watch(cardsProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Card')),
+      appBar: AppBar(
+        title: const Text('Card'),
+        actions: [
+          IconButton(
+            onPressed: () => setState(() => _revealed = !_revealed),
+            tooltip: _revealed ? 'Hide card details' : 'Reveal card details',
+            icon: Icon(
+              _revealed
+                  ? Icons.visibility_off_rounded
+                  : Icons.visibility_rounded,
+            ),
+          ),
+          const SizedBox(width: Space.x1),
+        ],
+      ),
       body: ResponsiveShell(
         child: AsyncSection<List<BankCard>>(
           value: cards,
           onRetry: () => ref.invalidate(cardsProvider),
-          skeleton: const Padding(
-            padding: EdgeInsets.all(Space.x5),
-            child: Column(
-              children: [
-                SkeletonBlock(height: 260, radius: AppRadius.xl),
-                SizedBox(height: Space.x6),
-                SkeletonBlock(width: 200, height: 34),
-                SizedBox(height: Space.x6),
-                SkeletonRows(count: 4),
-              ],
-            ),
-          ),
+          skeleton: const _DetailSkeleton(),
           isEmpty: (rows) => rows.isEmpty,
           empty: EmptyStateView(
             heading: 'No cards yet',
@@ -82,76 +81,126 @@ class _CardDetailScreenState extends ConsumerState<CardDetailScreen> {
               (card) => card.id == widget.cardId,
             );
             final initial = startIndex < 0 ? 0 : startIndex;
-            final controller = _pages ??= PageController(
-              initialPage: initial,
-              viewportFraction: 0.82,
-            );
             final activeIndex = (_index ?? initial).clamp(0, rows.length - 1);
             final card = rows[activeIndex];
 
             return ListView(
-              padding: const EdgeInsets.only(bottom: Space.x10),
+              padding: const EdgeInsets.only(bottom: Space.x12),
               children: [
-                SizedBox(
-                  height: 260,
-                  child: PageView.builder(
-                    controller: controller,
-                    itemCount: rows.length,
-                    onPageChanged: (value) => setState(() => _index = value),
-                    itemBuilder: (context, index) => Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: Space.x2),
-                      child: _CardFace(
-                        card: rows[index],
-                        isActive: index == activeIndex,
-                      ),
-                    ),
+                FadeSlideIn(
+                  duration: Motion.long,
+                  offset: const Offset(0, 28),
+                  scaleFrom: 0.9,
+                  child: CardCarousel(
+                    cards: rows,
+                    initialIndex: initial,
+                    onPageChanged: (value) => setState(() {
+                      _index = value;
+                      // A new card in front never inherits the previous card's
+                      // revealed digits.
+                      _revealed = false;
+                    }),
                   ),
                 ),
-                const SizedBox(height: Space.x4),
-                _PageDots(count: rows.length, active: activeIndex),
                 const SizedBox(height: Space.x6),
-                Center(
-                  child: MoneyText(
-                    card.balance,
-                    style: AppType.numericLarge.copyWith(fontSize: 36),
-                    currencyCode: card.currencyCode,
-                    label: '${card.label} balance',
+                CardValueSwap(
+                  child: Column(
+                    key: ValueKey(card.id),
+                    children: [
+                      MoneyText(
+                        card.balance,
+                        style: AppType.numericHero.copyWith(fontSize: 36),
+                        currencyCode: card.currencyCode,
+                        label: '${card.label} balance',
+                      ),
+                      const SizedBox(height: Space.x1),
+                      Text(
+                        '${card.label} \u2022 ${card.kind.label}',
+                        style: AppType.bodySmall.copyWith(
+                          color: context.tokens.textSecondary,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
+
+
+
+
+                
                 const SizedBox(height: Space.x6),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: Space.x5),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const SectionHeader(title: 'Card info'),
-                      DetailRow(
-                        label: 'Card number',
-                        value: NumericText(
-                          card.maskedNumber,
-                          style: AppType.numericMedium,
-                          label: 'Card number ending ${card.last4}',
-                        ),
-                        trailing: IconButton(
-                          onPressed: () => _copy(card),
-                          tooltip: 'Copy card number',
-                          icon: const Icon(Icons.copy_rounded, size: 18),
+                      const FadeSlideIn(
+                        index: 1,
+                        child: SectionHeader(title: 'Card info'),
+                      ),
+                      FadeSlideIn(
+                        index: 2,
+                        child: DetailRow(
+                          label: 'Card number',
+                          // Revealed digits are longer than the mask, so the
+                          // field scales down rather than wrapping mid number.
+                          value: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: _RevealedNumber(
+                              card: card,
+                              revealed: _revealed,
+                            ),
+                          ),
+                          trailing: IconButton(
+                            onPressed: () => _copy(card),
+                            tooltip: 'Copy card number',
+                            icon: const Icon(Icons.copy_rounded, size: 18),
+                          ),
                         ),
                       ),
-                      DetailRow(
-                        label: 'CVC',
-                        value: NumericText(
-                          card.cvc,
-                          style: AppType.numericMedium,
-                          label: 'CVC ${card.cvc}',
+                      FadeSlideIn(
+                        index: 3,
+                        child: DetailRow(
+                          label: 'CVC',
+                          value: NumericText(
+                            _revealed ? card.cvc : '\u2022\u2022\u2022',
+                            style: AppType.numericMedium,
+                            label: _revealed ? 'CVC ${card.cvc}' : 'CVC hidden',
+                          ),
                         ),
                       ),
-                      DetailRow(
-                        label: 'Expiry date',
-                        value: NumericText(
-                          card.expiry,
-                          style: AppType.numericMedium,
-                          label: 'Expires ${card.expiry}',
+                      FadeSlideIn(
+                        index: 4,
+                        child: DetailRow(
+                          label: 'Expiry date',
+                          value: NumericText(
+                            card.expiry,
+                            style: AppType.numericMedium,
+                            label: 'Expires ${card.expiry}',
+                          ),
+                        ),
+                      ),
+                      FadeSlideIn(
+                        index: 5,
+                        child: DetailRow(
+                          label: 'Card holder',
+                          value: Text(card.holderName),
+                        ),
+                      ),
+                      FadeSlideIn(
+                        index: 6,
+                        child: DetailRow(
+                          label: 'Status',
+                          value: Align(
+                            alignment: Alignment.centerLeft,
+                            child: StatusPill(
+                              label: card.status.label,
+                              color: card.status == CardStatus.frozen
+                                  ? context.tokens.info
+                                  : context.tokens.success,
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -166,140 +215,62 @@ class _CardDetailScreenState extends ConsumerState<CardDetailScreen> {
   }
 }
 
-/// Tall vertical card face with brand mark centred, masked last-4 at top left,
-/// and card type label at bottom right. Matches the reference design.
-class _CardFace extends StatelessWidget {
-  const _CardFace({required this.card, required this.isActive});
+/// Card digits. Swapping between masked and revealed cross fades, so the change
+/// reads as the same field rather than two fields.
+class _RevealedNumber extends StatelessWidget {
+  const _RevealedNumber({required this.card, required this.revealed});
 
   final BankCard card;
-  final bool isActive;
+  final bool revealed;
 
   @override
-  Widget build(BuildContext context) {
-    return FrostCardSurface(
-      radius: AppRadius.xl,
-      padding: const EdgeInsets.all(Space.x5),
+  Widget build(BuildContext context) => AnimatedSwitcher(
+    duration: Motion.resolve(context, Motion.short),
+    switchInCurve: Motion.standard,
+    switchOutCurve: Motion.standard,
+    layoutBuilder: (currentChild, previousChildren) => Stack(
+      alignment: AlignmentDirectional.centerStart,
+      children: [...previousChildren, ?currentChild],
+    ),
+    child: NumericText(
+      revealed ? card.number : card.maskedNumber,
+      key: ValueKey(revealed),
+      style: AppType.numericMedium,
+      label: revealed
+          ? 'Card number ${card.number}'
+          : 'Card number ending ${card.last4}',
+    ),
+  );
+}
+
+class _DetailSkeleton extends StatelessWidget {
+  const _DetailSkeleton();
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) => SingleChildScrollView(
+      physics: const NeverScrollableScrollPhysics(),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Top row: masked last-4
-          Text(
-            '\u2022\u2022\u2022\u2022 ${card.last4}',
-            style: AppType.labelMedium.copyWith(
-              color: Colors.white.withValues(alpha: 0.85),
-              letterSpacing: 1.2,
-            ),
-          ),
-          // Centre: brand mark
-          Expanded(
+          SizedBox(
+            height: CardCarousel.heightFor(constraints.maxWidth),
             child: Center(
-              child: FrostMark(size: 80),
+              child: CardFaceSkeleton(
+                width: CardCarousel.cardWidthFor(constraints.maxWidth),
+              ),
             ),
           ),
-          // Bottom row: network logo + card type
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              _NetworkLogo(network: card.network),
-              Text(
-                'Debit',
-                style: AppType.titleSmall.copyWith(
-                  color: Colors.white,
-                  letterSpacing: 0.3,
-                ),
-              ),
-            ],
+          const SizedBox(height: Space.x2),
+          const SkeletonBlock(width: 60, height: 7, radius: AppRadius.pill),
+          const SizedBox(height: Space.x6),
+          const SkeletonBlock(width: 190, height: 34),
+          const SizedBox(height: Space.x6),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: Space.x5),
+            child: SkeletonRows(count: 4),
           ),
         ],
       ),
-    );
-  }
-}
-
-/// Renders the card network logo. For Mastercard it draws the two overlapping
-/// circles; for Visa it shows the word mark.
-class _NetworkLogo extends StatelessWidget {
-  const _NetworkLogo({required this.network});
-
-  final CardNetwork network;
-
-  @override
-  Widget build(BuildContext context) {
-    if (network == CardNetwork.mastercard) {
-      return SizedBox(
-        width: 38,
-        height: 24,
-        child: CustomPaint(painter: _MastercardPainter()),
-      );
-    }
-    return Text(
-      'VISA',
-      style: AppType.titleSmall.copyWith(
-        color: Colors.white,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 2,
-      ),
-    );
-  }
-}
-
-class _MastercardPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final r = size.height / 2;
-
-    final leftCenter = Offset(r, r);
-    final rightCenter = Offset(size.width - r, r);
-
-    // Left circle (red/warm)
-    canvas.drawCircle(
-      leftCenter,
-      r,
-      Paint()..color = Colors.white.withValues(alpha: 0.7),
-    );
-    // Right circle (orange/warm)
-    canvas.drawCircle(
-      rightCenter,
-      r,
-      Paint()..color = Colors.white.withValues(alpha: 0.5),
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _PageDots extends StatelessWidget {
-  const _PageDots({required this.count, required this.active});
-
-  final int count;
-  final int active;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = context.tokens;
-    return Semantics(
-      label: 'Card ${active + 1} of $count',
-      child: ExcludeSemantics(
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            for (var index = 0; index < count; index++)
-              AnimatedContainer(
-                duration: Motion.resolve(context, Motion.short),
-                curve: Motion.standard,
-                margin: const EdgeInsets.symmetric(horizontal: 3),
-                width: index == active ? 20 : 7,
-                height: 7,
-                decoration: BoxDecoration(
-                  color: index == active ? tokens.accent : tokens.border,
-                  borderRadius: AppRadius.all(AppRadius.pill),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
+    ),
+  );
 }

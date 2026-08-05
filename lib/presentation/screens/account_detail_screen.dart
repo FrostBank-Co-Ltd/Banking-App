@@ -8,6 +8,7 @@ import '../../core/format/dates.dart';
 import '../../core/format/money.dart';
 import '../../domain/models.dart';
 import '../../state/providers.dart';
+import '../widgets/card_face.dart';
 import '../widgets/money_text.dart';
 import '../widgets/pressable.dart';
 import '../widgets/states.dart';
@@ -200,10 +201,9 @@ class _AccountBody extends ConsumerWidget {
                       ),
                       child: Row(
                         children: [
-                          Icon(
-                            Icons.credit_card_rounded,
-                            color: tokens.textSecondary,
-                          ),
+                          // The card itself, not a generic card icon, so the
+                          // row names the object the holder recognises.
+                          MiniCardFace(card: card, width: 38),
                           const SizedBox(width: Space.x3),
                           Expanded(
                             child: Column(
