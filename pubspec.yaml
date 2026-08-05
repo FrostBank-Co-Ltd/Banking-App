@@ -11,7 +11,11 @@ dependencies:
     sdk: flutter
   flutter_riverpod: ^3.4.2
   go_router: ^17.4.0
+  # Pinned: the only network dependency in the build, used by the Twelve Data
+  # market client.
+  http: 1.6.0
   intl: ^0.20.3
+  supabase_flutter: ^2.8.0
 
 dev_dependencies:
   flutter_test:

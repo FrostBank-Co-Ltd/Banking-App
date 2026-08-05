@@ -9,11 +9,16 @@ import '../../core/format/money.dart';
 import '../../domain/models.dart';
 import '../../state/providers.dart';
 import '../widgets/brand.dart';
+import '../widgets/card_face.dart';
 import '../widgets/money_text.dart';
+import '../widgets/motion_effects.dart';
 import '../widgets/pressable.dart';
 import '../widgets/states.dart';
 import '../widgets/surfaces.dart';
 import '../widgets/transaction_list.dart';
+
+/// Distance every sheet section travels on its entrance.
+const Offset _sectionRise = Offset(0, 22);
 
 /// Authenticated home. Gradient top region over a rounded sheet that carries
 /// quick actions, the Finance Hub, recent activity, and offers.
@@ -59,16 +64,34 @@ class DashboardScreen extends ConsumerWidget {
                       Space.x5,
                       Space.x16 + Space.x8,
                     ),
+                    // Storytelling: the sheet resolves top down, so the eye is
+                    // led from the actions to the ledger rather than met by a
+                    // finished page.
                     child: const Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _QuickActions(),
+                        FadeSlideIn(
+                          offset: _sectionRise,
+                          child: _QuickActions(),
+                        ),
                         SizedBox(height: Space.x8),
-                        _FinanceHub(),
+                        FadeSlideIn(
+                          index: 2,
+                          offset: _sectionRise,
+                          child: _FinanceHub(),
+                        ),
                         SizedBox(height: Space.x8),
-                        _RecentTransactions(),
+                        FadeSlideIn(
+                          index: 4,
+                          offset: _sectionRise,
+                          child: _RecentTransactions(),
+                        ),
                         SizedBox(height: Space.x8),
-                        _Offers(),
+                        FadeSlideIn(
+                          index: 6,
+                          offset: _sectionRise,
+                          child: _Offers(),
+                        ),
                       ],
                     ),
                   ),
@@ -385,27 +408,51 @@ class _CardsCarousel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final cards = ref.watch(cardsProvider);
 
+    // Portrait, matching the card face on the Cards screen, so a card is the
+    // same object wherever it appears.
+    const thumbWidth = 94.0;
+
     return SizedBox(
-      height: 96,
+      height: CardFace.heightFor(thumbWidth) + Space.x3,
       child: AsyncSection<List<BankCard>>(
         value: cards,
         onRetry: () => ref.invalidate(cardsProvider),
         skeleton: Row(
-          children: const [
-            SkeletonBlock(width: 150, height: 92, radius: AppRadius.lg),
-            SizedBox(width: Space.x3),
-            SkeletonBlock(width: 150, height: 92, radius: AppRadius.lg),
+          children: [
+            for (var i = 0; i < 3; i++)
+              Padding(
+                padding: const EdgeInsets.only(right: Space.x3),
+                child: SkeletonBlock(
+                  width: thumbWidth,
+                  height: CardFace.heightFor(thumbWidth),
+                  radius: AppRadius.sm,
+                ),
+              ),
           ],
         ),
         builder: (rows) => ListView(
           scrollDirection: Axis.horizontal,
+          clipBehavior: Clip.none,
           children: [
-            for (final card in rows)
+            for (var index = 0; index < rows.length; index++)
               Padding(
                 padding: const EdgeInsets.only(right: Space.x3),
-                child: _CardThumb(card: card),
+                child: FadeSlideIn(
+                  index: index,
+                  offset: const Offset(18, 0),
+                  child: _CardThumb(card: rows[index], width: thumbWidth),
+                ),
               ),
-            const _AddCardTile(),
+            FadeSlideIn(
+              index: rows.length,
+              offset: const Offset(18, 0),
+              child: Pressable(
+                onTap: () => context.push('/soon/new-card'),
+                semanticLabel: 'Add card',
+                borderRadius: AppRadius.sm,
+                child: AddCardTile(width: thumbWidth, onBrand: true),
+              ),
+            ),
           ],
         ),
       ),
@@ -414,96 +461,19 @@ class _CardsCarousel extends ConsumerWidget {
 }
 
 class _CardThumb extends StatelessWidget {
-  const _CardThumb({required this.card});
+  const _CardThumb({required this.card, required this.width});
 
   final BankCard card;
-
-  @override
-  Widget build(BuildContext context) {
-    return Pressable(
-      onTap: () => context.push('/card/${card.id}'),
-      semanticLabel:
-          '${card.label}, ${card.network.label} ending ${card.last4}, ${card.status.label}',
-      borderRadius: AppRadius.lg,
-      child: SizedBox(
-        width: 176,
-        child: FrostCardSurface(
-          radius: AppRadius.lg,
-          padding: const EdgeInsets.all(Space.x4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    card.network.label,
-                    style: AppType.labelSmall.copyWith(color: Colors.white),
-                  ),
-                  Icon(
-                    card.status == CardStatus.frozen
-                        ? Icons.ac_unit_rounded
-                        : Icons.contactless_rounded,
-                    color: Colors.white,
-                    size: 18,
-                  ),
-                ],
-              ),
-              NumericText(
-                '\u2022\u2022\u2022\u2022 ${card.last4}',
-                color: Colors.white.withValues(alpha: 0.86),
-              ),
-              MoneyText(
-                card.balance,
-                style: AppType.numericSmall,
-                color: Colors.white,
-                currencyCode: card.currencyCode,
-                label: '${card.label} balance',
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _AddCardTile extends StatelessWidget {
-  const _AddCardTile();
+  final double width;
 
   @override
   Widget build(BuildContext context) => Pressable(
-    onTap: () => context.push('/soon/new-card'),
-    semanticLabel: 'Add card',
-    borderRadius: AppRadius.lg,
-    child: Container(
-      width: 104,
-      decoration: BoxDecoration(
-        borderRadius: AppRadius.all(AppRadius.lg),
-        color: Colors.white.withValues(alpha: 0.08),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.24),
-          strokeAlign: BorderSide.strokeAlignInside,
-        ),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.add_rounded,
-            color: Colors.white.withValues(alpha: 0.9),
-          ),
-          const SizedBox(height: Space.x1),
-          Text(
-            'ADD CARD',
-            style: AppType.labelSmall.copyWith(
-              color: Colors.white.withValues(alpha: 0.82),
-            ),
-          ),
-        ],
-      ),
-    ),
+    onTap: () => context.push('/card/${card.id}'),
+    semanticLabel:
+        '${card.label}, ${card.kind.label} ${card.network.label} '
+        'ending ${card.last4}, ${card.status.label}',
+    borderRadius: AppRadius.sm,
+    child: MiniCardFace(card: card, width: width),
   );
 }
 
@@ -513,28 +483,31 @@ class _QuickActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(
     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-    children: const [
-      _QuickAction(
-        icon: Icons.south_west_rounded,
-        label: 'DEPOSIT',
-        route: '/soon/deposit',
-      ),
-      _QuickAction(
-        icon: Icons.north_east_rounded,
-        label: 'SEND',
-        route: '/soon/send-money',
-      ),
-      _QuickAction(
-        icon: Icons.qr_code_scanner_rounded,
-        label: 'SCAN',
-        route: '/soon/qr-payment',
-      ),
-      _QuickAction(
-        icon: Icons.receipt_long_rounded,
-        label: 'HISTORY',
-        route: '/activity',
-      ),
-    ],
+    children: staggered(
+      const [
+        _QuickAction(
+          icon: Icons.south_west_rounded,
+          label: 'DEPOSIT',
+          route: '/soon/deposit',
+        ),
+        _QuickAction(
+          icon: Icons.north_east_rounded,
+          label: 'SEND',
+          route: '/soon/send-money',
+        ),
+        _QuickAction(
+          icon: Icons.qr_code_scanner_rounded,
+          label: 'SCAN',
+          route: '/soon/qr-payment',
+        ),
+        _QuickAction(
+          icon: Icons.receipt_long_rounded,
+          label: 'HISTORY',
+          route: '/activity',
+        ),
+      ],
+      offset: const Offset(0, 14),
+    ),
   );
 }
 
@@ -616,7 +589,7 @@ class _FinanceHub extends StatelessWidget {
             child: HubTile(
               icon: Icons.currency_bitcoin_rounded,
               label: 'Crypto',
-              route: '/soon/crypto',
+              route: '/crypto',
             ),
           ),
         ],

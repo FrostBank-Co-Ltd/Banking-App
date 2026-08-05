@@ -257,6 +257,29 @@ abstract final class MockSeed {
       ),
     ];
   }
+  /// The pairs the Crypto screen tracks.
+  ///
+  /// Not mock data: these are real Twelve Data symbols and their prices come
+  /// from the live service. The list is deliberately short because the free plan
+  /// charges one credit per symbol per refresh.
+  static const List<CryptoAsset> cryptoAssets = [
+    CryptoAsset(code: 'BTC', name: 'Bitcoin', quote: 'USD'),
+    CryptoAsset(code: 'ETH', name: 'Ethereum', quote: 'USD'),
+    CryptoAsset(code: 'SOL', name: 'Solana', quote: 'USD'),
+    CryptoAsset(code: 'XRP', name: 'XRP', quote: 'USD'),
+    CryptoAsset(code: 'LTC', name: 'Litecoin', quote: 'USD'),
+  ];
+
+  /// Mock data: units held, keyed by asset code. The ledger is mock, the price
+  /// applied to it is live, so the portfolio figure is a real valuation of a
+  /// made up position. A zero means the pair is tracked but not held.
+  static const Map<String, double> cryptoHoldings = {
+    'BTC': 0.14382, // mock data
+    'ETH': 1.28740, // mock data
+    'SOL': 24.5, // mock data
+    'XRP': 0,
+    'LTC': 0,
+  };
 
   /// Mock data: promotions reference a named offer with a concrete benefit.
   static const List<Promo> promos = [

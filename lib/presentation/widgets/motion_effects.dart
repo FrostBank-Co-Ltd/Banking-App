@@ -139,6 +139,32 @@ class _ShimmerState extends State<Shimmer>
     duration: const Duration(milliseconds: 1400),
   );
 
+  bool _active = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(Shimmer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.enabled != widget.enabled) _sync();
+  }
+
+  void _sync() {
+    final next = widget.enabled && !Motion.isReduced(context);
+    if (next == _active) return;
+    _active = next;
+    if (next) {
+      _controller.repeat();
+    } else {
+      _controller.stop();
+      _controller.value = 0;
+    }
+  }
+
   @override
   void dispose() {
     _controller.dispose();
@@ -147,13 +173,7 @@ class _ShimmerState extends State<Shimmer>
 
   @override
   Widget build(BuildContext context) {
-    final active = widget.enabled && !Motion.isReduced(context);
-
-    if (!active) {
-      if (_controller.isAnimating) _controller.stop();
-      return widget.child;
-    }
-    if (!_controller.isAnimating) _controller.repeat();
+    if (!_active) return widget.child;
 
     final highlight = context.tokens.skeletonHighlight;
 

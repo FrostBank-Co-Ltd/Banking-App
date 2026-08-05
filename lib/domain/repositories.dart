@@ -37,6 +37,17 @@ abstract interface class PromoRepository {
   Future<List<Promo>> fetchPromos();
 }
 
+/// Live market data. The only repository backed by a network service rather than
+/// the seeded mock world.
+abstract interface class MarketRepository {
+  /// Quotes for [assets], in the order given. Assets the venue does not return
+  /// are dropped rather than failing the whole call, so one delisted pair cannot
+  /// blank the screen.
+  Future<List<CryptoQuote>> fetchCryptoQuotes(List<CryptoAsset> assets);
+
+  Future<CryptoSeries> fetchCryptoSeries(CryptoAsset asset, ChartRange range);
+}
+
 abstract interface class ProfileRepository {
   Future<UserProfile> fetchProfile();
 }

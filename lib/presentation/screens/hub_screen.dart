@@ -92,7 +92,7 @@ class HubScreen extends ConsumerWidget {
                   child: HubTile(
                     icon: Icons.currency_bitcoin_rounded,
                     label: 'Crypto',
-                    route: '/soon/crypto',
+                    route: '/crypto',
                   ),
                 ),
               ],

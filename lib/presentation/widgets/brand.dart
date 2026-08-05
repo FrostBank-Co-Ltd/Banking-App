@@ -6,10 +6,59 @@ import 'package:flutter/material.dart';
 import '../../core/design/tokens.dart';
 import '../../core/design/typography.dart';
 
-/// The FrostBank mark, ported from `assets/brand/frostbank_mark.svg`.
+/// Geometry of the FrostBank mark, transcribed one to one from the source SVG.
 ///
-/// The SVG is the source of truth for the geometry. Painting it keeps the mark
-/// crisp at every size on Android, iOS, and the web without a rasterised asset.
+/// The SVG is the source of truth. Painting from these numbers keeps the mark
+/// crisp at every size on Android, iOS, and the web without a rasterised asset,
+/// and gives one definition for both the badged mark and the bare glyph.
+///
+/// ```
+/// <svg viewBox="0 0 512 512">
+///   <path d="M120 256H392  M170 170L342 342  M170 342L342 170"
+///         stroke="#FFFFFF" stroke-width="22" stroke-linecap="square"/>
+/// </svg>
+/// ```
+abstract final class FrostGlyphGeometry {
+  static const double viewBox = 512;
+  static const double centre = 256;
+  static const double barNear = 120;
+  static const double barFar = 392;
+  static const double diagNear = 170;
+  static const double diagFar = 342;
+  static const double stroke = 22;
+
+  /// Ink extent in view box units, square caps included.
+  static const double inkWidth = barFar - barNear + stroke;
+  static const double inkHeight = diagFar - diagNear + stroke;
+
+  /// Height of the bare glyph as a share of its width.
+  static const double aspect = inkHeight / inkWidth;
+
+  /// Strokes the three paths. [unit] is canvas pixels per view box unit and
+  /// [origin] is where view box (256, 256) lands on the canvas.
+  static void stroke3(
+    Canvas canvas, {
+    required double unit,
+    required Offset origin,
+    required Color color,
+  }) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = stroke * unit
+      ..strokeCap = StrokeCap.square
+      ..isAntiAlias = true;
+
+    Offset at(double x, double y) =>
+        origin + Offset((x - centre) * unit, (y - centre) * unit);
+
+    canvas.drawLine(at(barNear, centre), at(barFar, centre), paint);
+    canvas.drawLine(at(diagNear, diagNear), at(diagFar, diagFar), paint);
+    canvas.drawLine(at(diagNear, diagFar), at(diagFar, diagNear), paint);
+  }
+}
+
+/// The FrostBank mark on its brand tile. Used wherever the logo needs to hold
+/// its own against surrounding content, such as the navigation pill.
 class FrostMark extends StatelessWidget {
   const FrostMark({this.size = 44, this.radiusRatio = 0.28, super.key});
 
@@ -29,17 +78,41 @@ class FrostMark extends StatelessWidget {
   );
 }
 
+/// The bare mark, no tile and no background, for surfaces that already carry the
+/// brand, such as the card face.
+///
+/// [width] is the full ink width. Height follows [FrostGlyphGeometry.aspect], so
+/// the glyph is never stretched.
+class FrostGlyph extends StatelessWidget {
+  const FrostGlyph({
+    required this.width,
+    this.color = Colors.white,
+    this.excludeSemantics = false,
+    super.key,
+  });
+
+  final double width;
+  final Color color;
+
+  /// Set when a parent already announces the brand.
+  final bool excludeSemantics;
+
+  @override
+  Widget build(BuildContext context) {
+    final painted = SizedBox(
+      width: width,
+      height: width * FrostGlyphGeometry.aspect,
+      child: CustomPaint(painter: _FrostGlyphPainter(color: color)),
+    );
+    if (excludeSemantics) return ExcludeSemantics(child: painted);
+    return Semantics(label: 'FrostBank', image: true, child: painted);
+  }
+}
+
 class _FrostMarkPainter extends CustomPainter {
   const _FrostMarkPainter({required this.radiusRatio});
 
   final double radiusRatio;
-
-  // Line geometry from the SVG, expressed as a share of the tile.
-  static const double _lineNear = 0.212;
-  static const double _lineFar = 0.788;
-  static const double _diagNear = 0.318;
-  static const double _diagFar = 0.682;
-  static const double _strokeRatio = 0.047;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -55,32 +128,37 @@ class _FrostMarkPainter extends CustomPainter {
     FrostGradients.paintLayers(canvas, rect);
     canvas.restore();
 
-    final stroke = Paint()
-      ..color = Colors.white
-      ..strokeWidth = side * _strokeRatio
-      ..strokeCap = StrokeCap.square
-      ..isAntiAlias = true;
-
-    canvas.drawLine(
-      Offset(side * _lineNear, side * 0.5),
-      Offset(side * _lineFar, side * 0.5),
-      stroke,
-    );
-    canvas.drawLine(
-      Offset(side * _diagNear, side * _diagNear),
-      Offset(side * _diagFar, side * _diagFar),
-      stroke,
-    );
-    canvas.drawLine(
-      Offset(side * _diagNear, side * _diagFar),
-      Offset(side * _diagFar, side * _diagNear),
-      stroke,
+    FrostGlyphGeometry.stroke3(
+      canvas,
+      unit: side / FrostGlyphGeometry.viewBox,
+      origin: rect.center,
+      color: Colors.white,
     );
   }
 
   @override
   bool shouldRepaint(covariant _FrostMarkPainter oldDelegate) =>
       oldDelegate.radiusRatio != radiusRatio;
+}
+
+class _FrostGlyphPainter extends CustomPainter {
+  const _FrostGlyphPainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    FrostGlyphGeometry.stroke3(
+      canvas,
+      unit: size.width / FrostGlyphGeometry.inkWidth,
+      origin: Offset(size.width / 2, size.height / 2),
+      color: color,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _FrostGlyphPainter oldDelegate) =>
+      oldDelegate.color != color;
 }
 
 /// The layered gradient recipe shared by the mark and every brand surface.

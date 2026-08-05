@@ -69,4 +69,47 @@ abstract final class Money {
     final formatted = NumberFormat('#,##0.0', 'en_US').format(value.abs());
     return '${value < 0 ? '-' : '+'}$formatted%';
   }
+
+  /// Spoken form of a move, because a signed percentage does not read aloud.
+  static String percentSpoken(double value) {
+    final formatted = NumberFormat('#,##0.0', 'en_US').format(value.abs());
+    return value < 0 ? 'down $formatted percent' : 'up $formatted percent';
+  }
+
+  static final NumberFormat _axisWhole = NumberFormat('#,##0', 'en_US');
+  static final NumberFormat _axisFine = NumberFormat('0.0000', 'en_US');
+
+  /// Chart axis figure, unadorned and as short as the magnitude allows, so four
+  /// or five labels fit in a narrow gutter.
+  static String axis(double value) {
+    final magnitude = value.abs();
+    if (magnitude >= 1000) return _axisWhole.format(value);
+    if (magnitude >= 1) return _amount.format(value);
+    return _axisFine.format(value);
+  }
+
+  static final NumberFormat _priceSmall = NumberFormat('#,##0.0000', 'en_US');
+
+  /// Market price. Sub dollar instruments need more decimals than a balance
+  /// does, otherwise a move of a tenth of a cent renders as no move at all.
+  static String price(double value, {String currencyCode = 'USD'}) {
+    final symbol = symbolFor(currencyCode);
+    final magnitude = value.abs() < 1
+        ? _priceSmall.format(value.abs())
+        : _amount.format(value.abs());
+    final sign = value < 0 ? '-' : '';
+    if (symbol.isEmpty) return '$sign$magnitude $currencyCode';
+    return '$sign$symbol$magnitude';
+  }
+
+  /// Signed market move, matched to the precision [price] would use.
+  static String priceChange(double value, {String currencyCode = 'USD'}) {
+    final symbol = symbolFor(currencyCode);
+    final magnitude = value.abs() < 1
+        ? _priceSmall.format(value.abs())
+        : _amount.format(value.abs());
+    final sign = value < 0 ? '-' : '+';
+    if (symbol.isEmpty) return '$sign$magnitude $currencyCode';
+    return '$sign$symbol$magnitude';
+  }
 }
