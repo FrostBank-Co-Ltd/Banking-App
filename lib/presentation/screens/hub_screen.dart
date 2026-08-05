@@ -84,7 +84,7 @@ class HubScreen extends ConsumerWidget {
                   child: HubTile(
                     icon: Icons.savings_rounded,
                     label: 'Savings',
-                    route: '/soon/savings',
+                    route: '/savings',
                   ),
                 ),
                 SizedBox(width: Space.x3),
