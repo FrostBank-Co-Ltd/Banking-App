@@ -22,11 +22,20 @@ class SplitBillsController extends Notifier<List<SplitBill>> {
     } catch (_) {}
   }
 
+  /// Create a new split bill.
+  ///
+  /// Supports all three [SplitMode]s.  For [SplitMode.custom] supply
+  /// [customAmounts] (length == [participantNames].length + 1, host first).
+  /// For [SplitMode.percentage] supply [percentages] (same length, sums to 100).
   Future<bool> createBill({
     required String title,
     required double totalAmount,
     required String category,
     required List<String> participantNames,
+    SplitMode splitMode = SplitMode.equal,
+    List<double>? customAmounts,
+    List<double>? percentages,
+    String? description,
   }) async {
     try {
       final repo = ref.read(splitBillRepositoryProvider);
@@ -35,6 +44,10 @@ class SplitBillsController extends Notifier<List<SplitBill>> {
         totalAmount: totalAmount,
         category: category,
         participantNames: participantNames,
+        splitMode: splitMode,
+        customAmounts: customAmounts,
+        percentages: percentages,
+        description: description,
       );
       final updatedList = await repo.fetchSplitBills();
       state = updatedList;
@@ -44,6 +57,7 @@ class SplitBillsController extends Notifier<List<SplitBill>> {
     }
   }
 
+  /// Mark a participant's share as paid and deduct from the chosen account.
   Future<bool> confirmPayment({
     required String billId,
     required String participantId,
@@ -71,6 +85,29 @@ class SplitBillsController extends Notifier<List<SplitBill>> {
       return success;
     } catch (_) {
       return false;
+    }
+  }
+
+  /// Join an existing split bill by its ID (scanned from a join-QR code).
+  ///
+  /// Returns the updated [SplitBill] on success, null otherwise.
+  Future<SplitBill?> joinBill({
+    required String billId,
+    required String participantName,
+  }) async {
+    try {
+      final repo = ref.read(splitBillRepositoryProvider);
+      final updated = await repo.joinBill(
+        billId: billId,
+        participantName: participantName,
+      );
+      if (updated != null) {
+        final updatedList = await repo.fetchSplitBills();
+        state = updatedList;
+      }
+      return updated;
+    } catch (_) {
+      return null;
     }
   }
 }

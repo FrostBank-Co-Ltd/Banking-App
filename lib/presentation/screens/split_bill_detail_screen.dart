@@ -12,7 +12,10 @@ import '../widgets/surfaces.dart';
 import 'qr_scanner_screen.dart';
 import 'split_bill_qr_screen.dart';
 
-/// Detail view for a specific split bill expense.
+// ---------------------------------------------------------------------------
+// Split Bill Detail Screen
+// ---------------------------------------------------------------------------
+
 class SplitBillDetailScreen extends ConsumerWidget {
   const SplitBillDetailScreen({required this.billId, super.key});
 
@@ -31,10 +34,13 @@ class SplitBillDetailScreen extends ConsumerWidget {
     }
 
     final bill = billMatch.first;
+    final tokens = context.tokens;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F8FE), // Touch of light blue tint for window
+      // Theme-adaptive background — respects light/dark mode.
+      backgroundColor: tokens.backgroundAlt,
       appBar: AppBar(
+        backgroundColor: tokens.backgroundAlt,
         title: Text(bill.title),
         actions: [
           IconButton(
@@ -44,7 +50,8 @@ class SplitBillDetailScreen extends ConsumerWidget {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(
-                    'Shared summary for "${bill.title}" (${bill.paidCount}/${bill.totalCount} paid).',
+                    'Shared summary for "${bill.title}" '
+                    '(${bill.paidCount}/${bill.totalCount} paid).',
                   ),
                 ),
               );
@@ -61,7 +68,7 @@ class SplitBillDetailScreen extends ConsumerWidget {
             Space.x16 + Space.x8,
           ),
           children: [
-            // Bill Header Card with EXACT Dashboard FrostBackdrop Gradient (default glow = 0.34)
+            // ── Bill header card ─────────────────────────────────────────
             FrostBackdrop(
               borderRadius: AppRadius.all(AppRadius.lg),
               child: Padding(
@@ -69,56 +76,43 @@ class SplitBillDetailScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    // Category + status + split-mode badges
+                    Wrap(
+                      spacing: Space.x2,
+                      runSpacing: Space.x2,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: Space.x3,
-                            vertical: Space.x1,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.2),
-                            borderRadius: AppRadius.all(AppRadius.pill),
-                          ),
-                          child: Text(
-                            bill.category,
-                            style: AppType.labelSmall.copyWith(
-                              color: Colors.white,
-                            ),
-                          ),
+                        _GlassBadge(bill.category),
+                        _GlassBadge(
+                          _splitModeLabel(bill.splitMode),
+                          icon: _splitModeIcon(bill.splitMode),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: Space.x3,
-                            vertical: Space.x1,
-                          ),
-                          decoration: BoxDecoration(
-                            color: bill.isSettled
-                                ? Colors.greenAccent.withValues(alpha: 0.25)
-                                : Colors.amber.withValues(alpha: 0.25),
-                            borderRadius: AppRadius.all(AppRadius.pill),
-                          ),
-                          child: Text(
-                            bill.isSettled ? 'Settled' : 'In Progress',
-                            style: AppType.labelSmall.copyWith(
-                              color: bill.isSettled ? Colors.greenAccent : Colors.amberAccent,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                        _GlassBadge(
+                          bill.isSettled ? 'Settled' : 'In Progress',
+                          color: bill.isSettled
+                              ? Colors.greenAccent
+                              : Colors.amberAccent,
                         ),
                       ],
                     ),
                     const SizedBox(height: Space.x4),
                     Text(
                       bill.title,
-                      style: AppType.headlineMedium.copyWith(
-                        color: Colors.white,
-                      ),
+                      style: AppType.headlineMedium.copyWith(color: Colors.white),
                     ),
+                    if (bill.description != null &&
+                        bill.description!.isNotEmpty) ...[
+                      const SizedBox(height: Space.x1),
+                      Text(
+                        bill.description!,
+                        style: AppType.bodySmall.copyWith(
+                          color: Colors.white.withValues(alpha: 0.76),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: Space.x1),
                     Text(
-                      'Created by ${bill.createdBy} • ${Dates.monthYear(bill.createdAt)}',
+                      'Created by ${bill.createdBy} · '
+                      '${Dates.monthYear(bill.createdAt)}',
                       style: AppType.bodySmall.copyWith(
                         color: Colors.white.withValues(alpha: 0.76),
                       ),
@@ -129,37 +123,21 @@ class SplitBillDetailScreen extends ConsumerWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Total Expense',
-                              style: AppType.labelSmall.copyWith(
-                                color: Colors.white.withValues(alpha: 0.76),
-                              ),
-                            ),
-                            MoneyText(
-                              bill.totalAmount,
-                              style: AppType.numericMedium,
-                              color: Colors.white,
-                            ),
-                          ],
+                        _HeaderStat(
+                          label: 'Total',
+                          value: bill.totalAmount,
                         ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              'Remaining Balance',
-                              style: AppType.labelSmall.copyWith(
-                                color: Colors.white.withValues(alpha: 0.76),
-                              ),
-                            ),
-                            MoneyText(
-                              bill.remainingBalance,
-                              style: AppType.numericMedium,
-                              color: bill.isSettled ? Colors.greenAccent : Colors.amberAccent,
-                            ),
-                          ],
+                        _HeaderStat(
+                          label: 'Collected',
+                          value: bill.paidAmount,
+                          valueColor: Colors.greenAccent,
+                        ),
+                        _HeaderStat(
+                          label: 'Remaining',
+                          value: bill.remainingBalance,
+                          valueColor: bill.isSettled
+                              ? Colors.greenAccent
+                              : Colors.amberAccent,
                         ),
                       ],
                     ),
@@ -171,7 +149,9 @@ class SplitBillDetailScreen extends ConsumerWidget {
                         minHeight: 8,
                         backgroundColor: Colors.white30,
                         valueColor: AlwaysStoppedAnimation<Color>(
-                          bill.isSettled ? Colors.greenAccent : Palette.skyBlue,
+                          bill.isSettled
+                              ? Colors.greenAccent
+                              : Palette.skyBlue,
                         ),
                       ),
                     ),
@@ -191,31 +171,36 @@ class SplitBillDetailScreen extends ConsumerWidget {
             const SectionHeader(title: 'Participants & Shares'),
             const SizedBox(height: Space.x2),
 
-            // Participant cards
-            Column(
-              children: [
-                for (final p in bill.participants)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: Space.x3),
-                    child: _ParticipantCard(
-                      bill: bill,
-                      participant: p,
-                    ),
-                  ),
-              ],
-            ),
+            for (final p in bill.participants)
+              Padding(
+                padding: const EdgeInsets.only(bottom: Space.x3),
+                child: _ParticipantCard(bill: bill, participant: p),
+              ),
           ],
         ),
       ),
     );
   }
+
+  String _splitModeLabel(SplitMode mode) => switch (mode) {
+        SplitMode.equal => 'Equal Split',
+        SplitMode.custom => 'Custom Split',
+        SplitMode.percentage => 'Percentage Split',
+      };
+
+  IconData _splitModeIcon(SplitMode mode) => switch (mode) {
+        SplitMode.equal => Icons.balance_rounded,
+        SplitMode.custom => Icons.edit_rounded,
+        SplitMode.percentage => Icons.pie_chart_rounded,
+      };
 }
 
+// ---------------------------------------------------------------------------
+// Participant card
+// ---------------------------------------------------------------------------
+
 class _ParticipantCard extends StatelessWidget {
-  const _ParticipantCard({
-    required this.bill,
-    required this.participant,
-  });
+  const _ParticipantCard({required this.bill, required this.participant});
 
   final SplitBill bill;
   final SplitBillParticipant participant;
@@ -241,6 +226,7 @@ class _ParticipantCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── Name row ────────────────────────────────────────────────────
           Row(
             children: [
               Monogram(
@@ -272,29 +258,86 @@ class _ParticipantCard extends StatelessWidget {
                               ? Icons.check_circle_rounded
                               : Icons.access_time_rounded,
                           size: 14,
-                          color: participant.isPaid ? Colors.green : Colors.amber.shade700,
+                          color: participant.isPaid
+                              ? Colors.green
+                              : Colors.amber.shade700,
                         ),
                         const SizedBox(width: 4),
                         Text(
                           participant.isPaid ? 'Paid' : 'Pending',
                           style: AppType.bodySmall.copyWith(
-                            color: participant.isPaid ? Colors.green : Colors.amber.shade700,
+                            color: participant.isPaid
+                                ? Colors.green
+                                : Colors.amber.shade700,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
+                        if (participant.paidAt != null) ...[
+                          Text(
+                            ' · ${Dates.relative(participant.paidAt!)}',
+                            style: AppType.bodySmall.copyWith(
+                              color: tokens.textSecondary,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ],
                 ),
               ),
-              MoneyText(
-                participant.shareAmount,
-                style: AppType.numericMedium,
-                color: tokens.textPrimary,
-                label: '${participant.name} share',
+              // Share amount + optional percentage badge
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  MoneyText(
+                    participant.shareAmount,
+                    style: AppType.numericMedium,
+                    color: tokens.textPrimary,
+                    label: '${participant.name} share',
+                  ),
+                  if (participant.sharePercentage != null)
+                    Text(
+                      '${participant.sharePercentage!.toStringAsFixed(1)}%',
+                      style: AppType.labelSmall.copyWith(
+                        color: tokens.textSecondary,
+                      ),
+                    ),
+                ],
               ),
             ],
           ),
+
+          // ── Note ────────────────────────────────────────────────────────
+          if (participant.note != null && participant.note!.isNotEmpty) ...[
+            const SizedBox(height: Space.x2),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: Space.x3,
+                vertical: Space.x2,
+              ),
+              decoration: BoxDecoration(
+                color: tokens.surface,
+                borderRadius: AppRadius.all(AppRadius.sm),
+                border: Border.all(color: tokens.border),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.notes_rounded,
+                      size: 14, color: tokens.textSecondary),
+                  const SizedBox(width: Space.x2),
+                  Expanded(
+                    child: Text(
+                      participant.note!,
+                      style: AppType.bodySmall.copyWith(
+                          color: tokens.textSecondary),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // ── Action buttons (pending only) ────────────────────────────────
           if (!participant.isPaid) ...[
             const SizedBox(height: Space.x4),
             Divider(color: tokens.border, height: 1),
@@ -303,16 +346,14 @@ class _ParticipantCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => SplitBillQrScreen(
-                            billId: bill.id,
-                            participantId: participant.id,
-                          ),
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => SplitBillQrScreen(
+                          billId: bill.id,
+                          participantId: participant.id,
                         ),
-                      );
-                    },
+                      ),
+                    ),
                     icon: const Icon(Icons.qr_code_rounded, size: 18),
                     label: const Text('Request Payment'),
                     style: OutlinedButton.styleFrom(
@@ -325,12 +366,12 @@ class _ParticipantCard extends StatelessWidget {
                 Expanded(
                   child: FilledButton.icon(
                     onPressed: () {
-                      final payload = participant.generateQrPayload(bill.id, bill.title);
+                      final payload =
+                          participant.generateQrPayload(bill.id, bill.title);
                       Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) => QrScannerScreen(
-                            initialPayload: payload,
-                          ),
+                          builder: (_) =>
+                              QrScannerScreen(initialPayload: payload),
                         ),
                       );
                     },
@@ -340,7 +381,8 @@ class _ParticipantCard extends StatelessWidget {
                       backgroundColor: tokens.interactivePrimary,
                       foregroundColor: Colors.white,
                       elevation: 2,
-                      textStyle: AppType.labelLarge.copyWith(fontWeight: FontWeight.bold),
+                      textStyle: AppType.labelLarge
+                          .copyWith(fontWeight: FontWeight.bold),
                     ),
                   ),
                 ),
@@ -349,6 +391,82 @@ class _ParticipantCard extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Small helpers
+// ---------------------------------------------------------------------------
+
+class _GlassBadge extends StatelessWidget {
+  const _GlassBadge(this.label, {this.icon, this.color});
+
+  final String label;
+  final IconData? icon;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = color ?? Colors.white;
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: Space.x3,
+        vertical: Space.x1,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.18),
+        borderRadius: AppRadius.all(AppRadius.pill),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 12, color: fg),
+            const SizedBox(width: 4),
+          ],
+          Text(
+            label,
+            style: AppType.labelSmall.copyWith(
+              color: fg,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeaderStat extends StatelessWidget {
+  const _HeaderStat({
+    required this.label,
+    required this.value,
+    this.valueColor,
+  });
+
+  final String label;
+  final double value;
+  final Color? valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: AppType.labelSmall.copyWith(
+            color: Colors.white.withValues(alpha: 0.76),
+          ),
+        ),
+        MoneyText(
+          value,
+          style: AppType.numericSmall,
+          color: valueColor ?? Colors.white,
+        ),
+      ],
     );
   }
 }
