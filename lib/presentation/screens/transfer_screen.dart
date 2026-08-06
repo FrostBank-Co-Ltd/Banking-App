@@ -72,14 +72,42 @@ class _TransferScreenState extends ConsumerState<TransferScreen> {
       ref.invalidate(monthFlowProvider(sourceAccount.id));
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Successfully transferred \$${amount.toStringAsFixed(2)} to $recipient!',
+        showModalBottomSheet(
+          context: context,
+          isDismissible: false,
+          enableDrag: false,
+          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+          builder: (ctx) => Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.check_circle, color: Colors.green, size: 70),
+                const SizedBox(height: 16),
+                const Text('Transfer Successful!', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Text(
+                  '₱${amount.toStringAsFixed(2)} was successfully withdrawn from ${sourceAccount.name} and sent to $recipient.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.grey, fontSize: 14),
+                ),
+                const SizedBox(height: 32),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF5F0D96)),
+                    onPressed: () {
+                      Navigator.pop(ctx); // Close sheet
+                      Navigator.pop(context); // Go back to dashboard
+                    },
+                    child: const Text('Done', style: TextStyle(color: Colors.white)),
+                  ),
+                )
+              ],
             ),
           ),
         );
-        Navigator.pop(context);
       }
     } on RepositoryFailure catch (e) {
       if (mounted) setState(() => _errorMessage = e.message);
@@ -174,6 +202,33 @@ class _TransferScreenState extends ConsumerState<TransferScreen> {
                   },
                 ),
                 const SizedBox(height: 20),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF5F0D96), Color(0xFF280643)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Available Balance', style: TextStyle(color: Colors.white70, fontSize: 14)),
+                      const SizedBox(height: 8),
+                      Text(
+                        '₱ ${sourceAccount.availableBalance.toStringAsFixed(2)}',
+                        style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(sourceAccount.name, style: const TextStyle(color: Colors.white, fontSize: 16)),
+                      Text('Account: ${sourceAccount.maskedNumber}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                    ],
+                  ),
+                ),
                 TextField(
                   controller: _recipientController,
                   decoration: InputDecoration(
