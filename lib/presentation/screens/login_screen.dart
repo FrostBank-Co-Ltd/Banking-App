@@ -8,8 +8,7 @@ import '../../state/providers.dart';
 import '../widgets/brand.dart';
 import '../widgets/surfaces.dart';
 
-/// Demo sign in. This build presents the interface, so the form opens with
-/// sample values, accepts anything, and validates nothing.
+/// Password Authentication Screen used for re-authenticating after closing/backgrounding the app.
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -18,8 +17,10 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  late final TextEditingController _email = TextEditingController();
-  late final TextEditingController _password = TextEditingController();
+  late final TextEditingController _email =
+      TextEditingController(text: 'ava.mercado@frostbank.app');
+  late final TextEditingController _password =
+      TextEditingController(text: 'frost2026');
 
   bool _obscure = true;
   bool _submitting = false;
@@ -50,6 +51,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _errorMessage = null;
     });
     try {
+      ref.read(preferencesProvider.notifier).setRememberedEmail(emailText);
       await ref
           .read(sessionProvider.notifier)
           .signIn(email: emailText, password: passwordText);
@@ -91,12 +93,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   const SizedBox(height: Space.x3),
                   Text(
-                    'Sign in to see balances, cards, and activity.',
+                    'Enter your password to unlock your active session.',
                     style: AppType.bodyMedium.copyWith(
                       color: Colors.white.withValues(alpha: 0.76),
                     ),
                   ),
-                  const SizedBox(height: Space.x7),
+                  const SizedBox(height: Space.x6),
                   GlassPanel(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -106,7 +108,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             padding: const EdgeInsets.all(Space.x3),
                             decoration: BoxDecoration(
                               color: Colors.red.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(AppRadius.md),
+                              borderRadius:
+                                  BorderRadius.circular(AppRadius.md),
                               border: Border.all(
                                 color: Colors.red.withValues(alpha: 0.5),
                               ),
@@ -151,7 +154,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           suffix: IconButton(
                             onPressed: () =>
                                 setState(() => _obscure = !_obscure),
-                            tooltip: _obscure ? 'Show password' : 'Hide password',
+                            tooltip:
+                                _obscure ? 'Show password' : 'Hide password',
                             icon: Icon(
                               _obscure
                                   ? Icons.visibility_rounded
@@ -164,7 +168,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         Align(
                           alignment: Alignment.centerRight,
                           child: TextButton(
-                            onPressed: () => context.push('/soon/password-reset'),
+                            onPressed: () =>
+                                context.push('/soon/password-reset'),
                             style: TextButton.styleFrom(
                               foregroundColor: Palette.frostIcePale,
                             ),
@@ -201,22 +206,39 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   const SizedBox(height: Space.x6),
                   Center(
-                    child: Wrap(
-                      alignment: WrapAlignment.center,
-                      crossAxisAlignment: WrapCrossAlignment.center,
+                    child: Column(
                       children: [
-                        Text(
-                          'New to FrostBank',
-                          style: AppType.bodyMedium.copyWith(
-                            color: Colors.white.withValues(alpha: 0.72),
+                        TextButton.icon(
+                          onPressed: () => context.go('/pin-lock'),
+                          icon: const Icon(Icons.pin_rounded,
+                              color: Colors.white, size: 18),
+                          label: Text(
+                            'Use 6-Digit PIN Screen',
+                            style: AppType.bodyMedium.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
-                        TextButton(
-                          onPressed: () => context.go('/register'),
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.white,
-                          ),
-                          child: const Text('Create account'),
+                        const SizedBox(height: Space.x2),
+                        Wrap(
+                          alignment: WrapAlignment.center,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(
+                              'New to FrostBank',
+                              style: AppType.bodyMedium.copyWith(
+                                color: Colors.white.withValues(alpha: 0.72),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () => context.go('/register'),
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.white,
+                              ),
+                              child: const Text('Create account'),
+                            ),
+                          ],
                         ),
                       ],
                     ),

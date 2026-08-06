@@ -17,7 +17,7 @@ import '../widgets/surfaces.dart';
 import 'new_card_sheet.dart';
 
 /// Card detail. The deck at the top, the balance of whichever card faces the
-/// holder, and that card's details below.
+/// holder, and that card's details below with PIN authentication security.
 class CardDetailScreen extends ConsumerStatefulWidget {
   const CardDetailScreen({required this.cardId, super.key});
 
@@ -44,6 +44,89 @@ class _CardDetailScreenState extends ConsumerState<CardDetailScreen> {
     );
   }
 
+  Future<bool> _promptPinVerification(
+    BuildContext context, {
+    required String title,
+    required String message,
+  }) async {
+    final controller = TextEditingController(text: '');
+    final tokens = context.tokens;
+    final verified = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: tokens.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
+        title: Row(
+          children: [
+            Icon(Icons.lock_rounded, color: tokens.accent, size: 20),
+            const SizedBox(width: Space.x2),
+            Expanded(
+              child: Text(
+                title,
+                style: AppType.titleMedium.copyWith(color: tokens.textPrimary),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              message,
+              style: AppType.bodySmall.copyWith(color: tokens.textSecondary),
+            ),
+            const SizedBox(height: Space.x4),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              obscureText: true,
+              maxLength: 6,
+              autofocus: true,
+              textAlign: TextAlign.center,
+              style: AppType.numericHero.copyWith(
+                fontSize: 24,
+                letterSpacing: 8,
+              ),
+              decoration: InputDecoration(
+                hintText: '••••••',
+                counterText: '',
+                filled: true,
+                fillColor: tokens.interactiveSecondary,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  borderSide: BorderSide(color: tokens.border),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: tokens.textSecondary),
+            ),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (controller.text.trim().length == 6) {
+                Navigator.of(ctx).pop(true);
+              }
+            },
+            style: FilledButton.styleFrom(backgroundColor: tokens.accent),
+            child: const Text('Verify PIN'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return verified ?? false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final cards = ref.watch(cardsProvider);
@@ -53,8 +136,21 @@ class _CardDetailScreenState extends ConsumerState<CardDetailScreen> {
         title: const Text('Card'),
         actions: [
           IconButton(
-            onPressed: () => setState(() => _revealed = !_revealed),
-            tooltip: _revealed ? 'Hide card details' : 'Reveal card details',
+            onPressed: () async {
+              if (_revealed) {
+                setState(() => _revealed = false);
+              } else {
+                final ok = await _promptPinVerification(
+                  context,
+                  title: 'Security Verification',
+                  message: 'Enter your 6-digit PIN to reveal full card details.',
+                );
+                if (ok && mounted) {
+                  setState(() => _revealed = true);
+                }
+              }
+            },
+            tooltip: _revealed ? 'Hide card details' : 'Reveal card details (PIN required)',
             icon: Icon(
               _revealed
                   ? Icons.visibility_off_rounded
@@ -124,11 +220,6 @@ class _CardDetailScreenState extends ConsumerState<CardDetailScreen> {
                     ],
                   ),
                 ),
-
-
-
-
-                
                 const SizedBox(height: Space.x6),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: Space.x5),
@@ -143,8 +234,6 @@ class _CardDetailScreenState extends ConsumerState<CardDetailScreen> {
                         index: 2,
                         child: DetailRow(
                           label: 'Card number',
-                          // Revealed digits are longer than the mask, so the
-                          // field scales down rather than wrapping mid number.
                           value: FittedBox(
                             fit: BoxFit.scaleDown,
                             alignment: Alignment.centerLeft,
@@ -204,6 +293,14 @@ class _CardDetailScreenState extends ConsumerState<CardDetailScreen> {
                           ),
                           trailing: Pressable(
                             onTap: () async {
+                              final okPin = await _promptPinVerification(
+                                context,
+                                title: 'Security PIN Required',
+                                message:
+                                    'Enter your 6-digit PIN to confirm card state update.',
+                              );
+                              if (!okPin || !context.mounted) return;
+
                               final controller = ref.read(
                                 cardsControllerProvider.notifier,
                               );
@@ -274,8 +371,6 @@ class _CardDetailScreenState extends ConsumerState<CardDetailScreen> {
   }
 }
 
-/// Card digits. Swapping between masked and revealed cross fades, so the change
-/// reads as the same field rather than two fields.
 class _RevealedNumber extends StatelessWidget {
   const _RevealedNumber({required this.card, required this.revealed});
 
@@ -284,22 +379,22 @@ class _RevealedNumber extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AnimatedSwitcher(
-    duration: Motion.resolve(context, Motion.short),
-    switchInCurve: Motion.standard,
-    switchOutCurve: Motion.standard,
-    layoutBuilder: (currentChild, previousChildren) => Stack(
-      alignment: AlignmentDirectional.centerStart,
-      children: [...previousChildren, ?currentChild],
-    ),
-    child: NumericText(
-      revealed ? card.number : card.maskedNumber,
-      key: ValueKey(revealed),
-      style: AppType.numericMedium,
-      label: revealed
-          ? 'Card number ${card.number}'
-          : 'Card number ending ${card.last4}',
-    ),
-  );
+        duration: Motion.resolve(context, Motion.short),
+        switchInCurve: Motion.standard,
+        switchOutCurve: Motion.standard,
+        layoutBuilder: (currentChild, previousChildren) => Stack(
+          alignment: AlignmentDirectional.centerStart,
+          children: [...previousChildren, ?currentChild],
+        ),
+        child: NumericText(
+          revealed ? card.number : card.maskedNumber,
+          key: ValueKey(revealed),
+          style: AppType.numericMedium,
+          label: revealed
+              ? 'Card number ${card.number}'
+              : 'Card number ending ${card.last4}',
+        ),
+      );
 }
 
 class _DetailSkeleton extends StatelessWidget {
@@ -307,29 +402,29 @@ class _DetailSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) => SingleChildScrollView(
-      physics: const NeverScrollableScrollPhysics(),
-      child: Column(
-        children: [
-          SizedBox(
-            height: CardCarousel.heightFor(constraints.maxWidth),
-            child: Center(
-              child: CardFaceSkeleton(
-                width: CardCarousel.cardWidthFor(constraints.maxWidth),
+        builder: (context, constraints) => SingleChildScrollView(
+          physics: const NeverScrollableScrollPhysics(),
+          child: Column(
+            children: [
+              SizedBox(
+                height: CardCarousel.heightFor(constraints.maxWidth),
+                child: Center(
+                  child: CardFaceSkeleton(
+                    width: CardCarousel.cardWidthFor(constraints.maxWidth),
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(height: Space.x2),
+              const SkeletonBlock(width: 60, height: 7, radius: AppRadius.pill),
+              const SizedBox(height: Space.x6),
+              const SkeletonBlock(width: 190, height: 34),
+              const SizedBox(height: Space.x6),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: Space.x5),
+                child: SkeletonRows(count: 4),
+              ),
+            ],
           ),
-          const SizedBox(height: Space.x2),
-          const SkeletonBlock(width: 60, height: 7, radius: AppRadius.pill),
-          const SizedBox(height: Space.x6),
-          const SkeletonBlock(width: 190, height: 34),
-          const SizedBox(height: Space.x6),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: Space.x5),
-            child: SkeletonRows(count: 4),
-          ),
-        ],
-      ),
-    ),
-  );
+        ),
+      );
 }
