@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import '../../domain/models.dart';
 import '../../domain/repositories.dart';
 import '../../state/providers.dart';
@@ -35,28 +35,29 @@ class _DepositScreenState extends ConsumerState<DepositScreen> {
       return;
     }
 
-    // Step 1: Generate Reference Code and show Receipt instead of depositing immediately
     final refCode = 'DEP-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF1E1E32) : Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Deposit Receipt (POC)', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text('Deposit Receipt (POC)', style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Destination: ${account.name}'),
+            Text('Destination: ${account.name}', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)),
             const SizedBox(height: 8),
-            Text('Inputted Amount: ₱${inputAmount.toStringAsFixed(2)}'),
+            Text('Inputted Amount: ₱${inputAmount.toStringAsFixed(2)}', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)),
             const SizedBox(height: 8),
-            Text('Reference Code: $refCode', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            Text('Reference Code: $refCode', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black)),
             const Divider(height: 24),
-            const Text(
+            Text(
               'To complete this deposit in the real world, input this reference code at a cash machine. \n\nFor this POC, closing this dialog will simulate a machine deposit and add a default of ₱100.00 to your account.',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
+              style: TextStyle(fontSize: 12, color: isDark ? Colors.white54 : Colors.grey),
             ),
           ],
         ),
@@ -64,10 +65,13 @@ class _DepositScreenState extends ConsumerState<DepositScreen> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF5F0D96)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isDark ? const Color(0xFF4A4A7A) : const Color(0xFF003366),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
               onPressed: () async {
-                Navigator.pop(ctx); // Close receipt
-                await _executeDefaultDeposit(account); // Process the actual 100 PHP
+                Navigator.pop(ctx); 
+                await _executeDefaultDeposit(account); 
               },
               child: const Text('Close & Deposit ₱100.00', style: TextStyle(color: Colors.white)),
             ),
@@ -77,7 +81,6 @@ class _DepositScreenState extends ConsumerState<DepositScreen> {
     );
   }
 
-  // Step 2: The actual Riverpod logic forcing the 100 PHP deposit
   Future<void> _executeDefaultDeposit(Account account) async {
     setState(() {
       _submitting = true;
@@ -85,7 +88,7 @@ class _DepositScreenState extends ConsumerState<DepositScreen> {
     });
 
     try {
-      const double hackathonDefaultAmount = 100.0; // Forced rule
+      const double hackathonDefaultAmount = 100.0;
       await ref.read(accountRepositoryProvider).deposit(
             accountId: account.id,
             amount: hackathonDefaultAmount,
@@ -96,7 +99,7 @@ class _DepositScreenState extends ConsumerState<DepositScreen> {
       ref.invalidate(transactionsProvider);
       
       if (mounted) {
-        Navigator.pop(context); // Return to previous screen
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Simulated machine deposit of ₱100.00 to ${account.name} successful!')),
         );
@@ -111,140 +114,106 @@ class _DepositScreenState extends ConsumerState<DepositScreen> {
   @override
   Widget build(BuildContext context) {
     final accountsAsync = ref.watch(accountsProvider);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    // Themed Input Decoration
+    final inputDecoration = InputDecoration(
+      filled: true,
+      fillColor: isDark ? Colors.white.withOpacity(0.08) : Colors.grey.shade100,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(30),
+        borderSide: BorderSide(color: isDark ? Colors.white24 : Colors.grey.shade300, width: 1),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(30),
+        borderSide: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade300, width: 1),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(30),
+        borderSide: BorderSide(color: isDark ? Colors.white60 : const Color(0xFF003366), width: 1),
+      ),
+      hintStyle: TextStyle(color: isDark ? Colors.white54 : Colors.grey),
+    );
 
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('Deposit Funds'),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        foregroundColor: isDark ? Colors.white : Colors.black,
       ),
       body: accountsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (err, stack) => Center(child: Text('Error: $err', style: TextStyle(color: isDark ? Colors.redAccent : Colors.red))),
         data: (accounts) {
-          if (accounts.isEmpty) {
-            return const Center(child: Text('No accounts available.'));
+          if (accounts.isEmpty) return const Center(child: Text('No accounts available.'));
+          if (_selectedAccountId == null && accounts.isNotEmpty) {
+            _selectedAccountId = accounts.first.id;
           }
-
-          _selectedAccountId ??= accounts.first.id;
-          final selectedAccount = accounts.firstWhere(
-            (a) => a.id == _selectedAccountId,
-            orElse: () => accounts.first,
-          );
+          final selectedAccount = accounts.firstWhere((a) => a.id == _selectedAccountId, orElse: () => accounts.first);
 
           return Padding(
             padding: const EdgeInsets.all(24.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (_errorMessage != null) ...[
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade50,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.red.shade200),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.error_outline, color: Colors.red),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            _errorMessage!,
-                            style: const TextStyle(color: Colors.red),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                const Text(
-                  'Deposit to',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey,
-                  ),
-                ),
+                Text('Select Destination Account', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
-                  initialValue: _selectedAccountId,
-                  decoration: InputDecoration(
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    filled: true,
-                    fillColor: Colors.white,
-                  ),
-                  items: accounts.map((Account account) {
+                  value: _selectedAccountId,
+                  decoration: inputDecoration,
+                  dropdownColor: isDark ? const Color(0xFF1E1E32) : Colors.white,
+                  items: accounts.map((a) {
                     return DropdownMenuItem(
-                      value: account.id,
-                      child: Text(
-                        '${account.name} (${account.maskedNumber})',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
+                      value: a.id,
+                      child: Text(a.name, style: TextStyle(color: isDark ? Colors.white : Colors.black)),
                     );
                   }).toList(),
-                  onChanged: (String? newValue) {
-                    if (newValue != null) {
-                      setState(() => _selectedAccountId = newValue);
-                    }
+                  onChanged: (val) {
+                    if (val != null) setState(() => _selectedAccountId = val);
                   },
                 ),
                 const SizedBox(height: 24),
-                const Text(
-                  'Amount',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey,
-                  ),
-                ),
+                Text('Amount', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _amountController,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  style: const TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  decoration: InputDecoration(
-                    prefixText: '${selectedAccount.currencyCode} \$ ',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    filled: true,
-                    fillColor: Colors.white,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+                  ],
+                  style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                  decoration: inputDecoration.copyWith(
+                    prefixText: '₱ ',
+                    prefixStyle: TextStyle(color: isDark ? Colors.white : Colors.black, fontSize: 16),
+                    hintText: '0.00',
                   ),
                 ),
+                if (_errorMessage != null) ...[
+                  const SizedBox(height: 16),
+                  Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
+                ],
                 const Spacer(),
                 SizedBox(
                   width: double.infinity,
-                  height: 56,
+                  height: 54,
                   child: ElevatedButton(
-                    onPressed: _submitting ? null : () => _submit(selectedAccount),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF5F0D96),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
+                      backgroundColor: isDark ? const Color(0xFF4A4A7A) : const Color(0xFF003366),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                     ),
+                    onPressed: _submitting ? null : () => _submit(selectedAccount),
                     child: _submitting
                         ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text(
-                            'Confirm Deposit',
-                            style: TextStyle(fontSize: 18, color: Colors.white),
-                          ),
+                        : const Text('Confirm Deposit', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
-                ),
-                const SizedBox(height: 24),
+                )
               ],
             ),
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(child: Text('Failed to load accounts: $err')),
       ),
     );
   }

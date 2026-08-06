@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import '../../domain/models.dart';
 import '../../domain/repositories.dart';
 import '../../state/providers.dart';
@@ -16,7 +16,6 @@ class _TransferScreenState extends ConsumerState<TransferScreen> {
   final _recipientController = TextEditingController();
   final _amountController = TextEditingController();
   final _noteController = TextEditingController();
-
   String? _selectedSourceAccountId;
   bool _submitting = false;
   String? _errorMessage;
@@ -33,20 +32,20 @@ class _TransferScreenState extends ConsumerState<TransferScreen> {
     if (_submitting) return;
 
     final recipient = _recipientController.text.trim();
-    if (recipient.isEmpty) {
-      setState(() => _errorMessage = 'Please enter a recipient name or account number.');
-      return;
-    }
-
     final amountText = _amountController.text.trim();
+    final note = _noteController.text.trim();
+
     final amount = double.tryParse(amountText);
-    if (amount == null || amount <= 0) {
-      setState(() => _errorMessage = 'Please enter a valid transfer amount.');
+    if (recipient.isEmpty) {
+      setState(() => _errorMessage = 'Please enter a recipient.');
       return;
     }
-
+    if (amount == null || amount <= 0) {
+      setState(() => _errorMessage = 'Please enter a valid amount.');
+      return;
+    }
     if (amount > sourceAccount.availableBalance) {
-      setState(() => _errorMessage = 'Insufficient balance. Available: \$${sourceAccount.availableBalance.toStringAsFixed(2)}');
+      setState(() => _errorMessage = 'Insufficient funds.');
       return;
     }
 
@@ -60,22 +59,20 @@ class _TransferScreenState extends ConsumerState<TransferScreen> {
             fromAccountId: sourceAccount.id,
             recipient: recipient,
             amount: amount,
-            note: _noteController.text.trim().isNotEmpty
-                ? _noteController.text.trim()
-                : null,
+            note: note.isEmpty ? null : note,
           );
 
       ref.invalidate(accountsProvider);
       ref.invalidate(accountProvider(sourceAccount.id));
       ref.invalidate(transactionsProvider);
-      ref.invalidate(filteredTransactionsProvider);
-      ref.invalidate(monthFlowProvider(sourceAccount.id));
 
       if (mounted) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
         showModalBottomSheet(
           context: context,
           isDismissible: false,
           enableDrag: false,
+          backgroundColor: isDark ? const Color(0xFF1E1E32) : Colors.white,
           shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
           builder: (ctx) => Padding(
             padding: const EdgeInsets.all(24.0),
@@ -84,22 +81,25 @@ class _TransferScreenState extends ConsumerState<TransferScreen> {
               children: [
                 const Icon(Icons.check_circle, color: Colors.green, size: 70),
                 const SizedBox(height: 16),
-                const Text('Transfer Successful!', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                Text('Transfer Successful!', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
                 const SizedBox(height: 8),
                 Text(
                   '₱${amount.toStringAsFixed(2)} was successfully withdrawn from ${sourceAccount.name} and sent to $recipient.',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.grey, fontSize: 14),
+                  style: TextStyle(color: isDark ? Colors.white70 : Colors.grey, fontSize: 14),
                 ),
                 const SizedBox(height: 32),
                 SizedBox(
                   width: double.infinity,
                   height: 50,
                   child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF5F0D96)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isDark ? const Color(0xFF4A4A7A) : const Color(0xFF003366),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
                     onPressed: () {
-                      Navigator.pop(ctx); // Close sheet
-                      Navigator.pop(context); // Go back to dashboard
+                      Navigator.pop(ctx); 
+                      Navigator.pop(context); 
                     },
                     child: const Text('Done', style: TextStyle(color: Colors.white)),
                   ),
@@ -109,8 +109,6 @@ class _TransferScreenState extends ConsumerState<TransferScreen> {
           ),
         );
       }
-    } on RepositoryFailure catch (e) {
-      if (mounted) setState(() => _errorMessage = e.message);
     } catch (e) {
       if (mounted) setState(() => _errorMessage = 'Transfer failed: $e');
     } finally {
@@ -121,98 +119,82 @@ class _TransferScreenState extends ConsumerState<TransferScreen> {
   @override
   Widget build(BuildContext context) {
     final accountsAsync = ref.watch(accountsProvider);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final inputDecoration = InputDecoration(
+      filled: true,
+      fillColor: isDark ? Colors.white.withOpacity(0.08) : Colors.grey.shade100,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(30),
+        borderSide: BorderSide(color: isDark ? Colors.white24 : Colors.grey.shade300, width: 1),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(30),
+        borderSide: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade300, width: 1),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(30),
+        borderSide: BorderSide(color: isDark ? Colors.white60 : const Color(0xFF003366), width: 1),
+      ),
+      hintStyle: TextStyle(color: isDark ? Colors.white54 : Colors.grey),
+    );
 
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('Send Money'),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        foregroundColor: isDark ? Colors.white : Colors.black,
       ),
       body: accountsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (err, stack) => Center(child: Text('Error: $err', style: TextStyle(color: isDark ? Colors.redAccent : Colors.red))),
         data: (accounts) {
-          if (accounts.isEmpty) {
-            return const Center(child: Text('No accounts available.'));
+          if (accounts.isEmpty) return const Center(child: Text('No accounts available.'));
+          if (_selectedSourceAccountId == null && accounts.isNotEmpty) {
+            _selectedSourceAccountId = accounts.first.id;
           }
-
-          _selectedSourceAccountId ??= accounts.first.id;
-          final sourceAccount = accounts.firstWhere(
-            (a) => a.id == _selectedSourceAccountId,
-            orElse: () => accounts.first,
-          );
+          final sourceAccount = accounts.firstWhere((a) => a.id == _selectedSourceAccountId, orElse: () => accounts.first);
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (_errorMessage != null) ...[
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade50,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.red.shade200),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.error_outline, color: Colors.red),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            _errorMessage!,
-                            style: const TextStyle(color: Colors.red),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                const Text(
-                  'From Account',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey,
-                  ),
-                ),
+                Text('From Account', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
-                  initialValue: _selectedSourceAccountId,
-                  decoration: InputDecoration(
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    filled: true,
-                    fillColor: Colors.white,
-                  ),
-                  items: accounts.map((Account account) {
+                  value: _selectedSourceAccountId,
+                  decoration: inputDecoration,
+                  dropdownColor: isDark ? const Color(0xFF1E1E32) : Colors.white,
+                  items: accounts.map((a) {
                     return DropdownMenuItem(
-                      value: account.id,
-                      child: Text(
-                        '${account.name} (\$${account.availableBalance.toStringAsFixed(2)})',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
+                      value: a.id,
+                      child: Text(a.name, style: TextStyle(color: isDark ? Colors.white : Colors.black)),
                     );
                   }).toList(),
-                  onChanged: (String? newValue) {
-                    if (newValue != null) {
-                      setState(() => _selectedSourceAccountId = newValue);
-                    }
+                  onChanged: (val) {
+                    if (val != null) setState(() => _selectedSourceAccountId = val);
                   },
                 ),
                 const SizedBox(height: 20),
+                
+                // Viewable Source Account Card
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF5F0D96), Color(0xFF280643)],
+                    gradient: LinearGradient(
+                      colors: isDark 
+                          ? [const Color(0xFF2A2A4A), const Color(0xFF1E1E32)] 
+                          : [const Color(0xFF003366), const Color(0xFF0055A4)],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
                     borderRadius: BorderRadius.circular(20),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 10, offset: const Offset(0, 4))],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -229,72 +211,68 @@ class _TransferScreenState extends ConsumerState<TransferScreen> {
                     ],
                   ),
                 ),
+                
+                // SPACER ADJUSTMENT: Increased spacing between card and recipient
+                const SizedBox(height: 32), 
+
+                Text('Recipient Name', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
                 TextField(
                   controller: _recipientController,
-                  decoration: InputDecoration(
-                    labelText: 'Recipient Name or Account',
-                    prefixIcon: const Icon(Icons.person_outline),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    filled: true,
-                    fillColor: Colors.white,
-                  ),
+                  style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                  decoration: inputDecoration.copyWith(hintText: 'e.g. John Doe'),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
+                
+                Text('Amount', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
                 TextField(
                   controller: _amountController,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  decoration: InputDecoration(
-                    labelText: 'Amount',
-                    prefixText: '\$ ',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    filled: true,
-                    fillColor: Colors.white,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+                  ],
+                  style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                  decoration: inputDecoration.copyWith(
+                    prefixText: '₱ ',
+                    prefixStyle: TextStyle(color: isDark ? Colors.white : Colors.black, fontSize: 16),
+                    hintText: '0.00',
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
+
+                Text('Note (Optional)', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
                 TextField(
                   controller: _noteController,
-                  decoration: InputDecoration(
-                    labelText: 'Note (Optional)',
-                    prefixIcon: const Icon(Icons.edit_note),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    filled: true,
-                    fillColor: Colors.white,
-                  ),
+                  style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                  decoration: inputDecoration.copyWith(hintText: 'What is this for?'),
                 ),
+                
+                if (_errorMessage != null) ...[
+                  const SizedBox(height: 16),
+                  Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
+                ],
+                
                 const SizedBox(height: 32),
                 SizedBox(
                   width: double.infinity,
-                  height: 56,
+                  height: 54,
                   child: ElevatedButton(
-                    onPressed: _submitting ? null : () => _submit(sourceAccount),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF5F0D96),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
+                      backgroundColor: isDark ? const Color(0xFF4A4A7A) : const Color(0xFF003366),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                     ),
+                    onPressed: _submitting ? null : () => _submit(sourceAccount),
                     child: _submitting
                         ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text(
-                            'Send Funds',
-                            style: TextStyle(fontSize: 18, color: Colors.white),
-                          ),
+                        : const Text('Send Funds', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
-                ),
+                )
               ],
             ),
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(child: Text('Failed to load accounts: $err')),
       ),
     );
   }
