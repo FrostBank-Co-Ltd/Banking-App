@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/design/tokens.dart';
+import '../../core/format/money.dart';
 import '../../domain/models.dart';
 import '../../domain/repositories.dart';
 import '../../state/providers.dart';
+import '../widgets/money_text.dart';
 
 class TransferScreen extends ConsumerStatefulWidget {
   const TransferScreen({super.key});
@@ -44,10 +47,27 @@ class _TransferScreenState extends ConsumerState<TransferScreen> {
       setState(() => _errorMessage = 'Please enter a valid amount.');
       return;
     }
-    if (amount > sourceAccount.availableBalance) {
+
+    final prefs = ref.read(preferencesProvider);
+    final symbol = prefs.activeCurrency.symbol;
+    final currencyCode = prefs.currencyCode;
+
+    final convertedAvail = Money.convert(
+      sourceAccount.availableBalance,
+      fromCurrency: sourceAccount.currencyCode,
+      toCurrency: currencyCode,
+    );
+
+    if (amount > convertedAvail) {
       setState(() => _errorMessage = 'Insufficient funds.');
       return;
     }
+
+    final baseUsdAmount = Money.convert(
+      amount,
+      fromCurrency: currencyCode,
+      toCurrency: 'USD',
+    );
 
     setState(() {
       _submitting = true;
@@ -58,7 +78,7 @@ class _TransferScreenState extends ConsumerState<TransferScreen> {
       await ref.read(accountRepositoryProvider).transfer(
             fromAccountId: sourceAccount.id,
             recipient: recipient,
-            amount: amount,
+            amount: baseUsdAmount,
             note: note.isEmpty ? null : note,
           );
 
@@ -84,7 +104,7 @@ class _TransferScreenState extends ConsumerState<TransferScreen> {
                 Text('Transfer Successful!', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
                 const SizedBox(height: 8),
                 Text(
-                  '₱${amount.toStringAsFixed(2)} was successfully withdrawn from ${sourceAccount.name} and sent to $recipient.',
+                  '$symbol${amount.toStringAsFixed(2)} was successfully withdrawn from ${sourceAccount.name} and sent to $recipient.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: isDark ? Colors.white70 : Colors.grey, fontSize: 14),
                 ),
@@ -119,6 +139,7 @@ class _TransferScreenState extends ConsumerState<TransferScreen> {
   @override
   Widget build(BuildContext context) {
     final accountsAsync = ref.watch(accountsProvider);
+    final activeSymbol = ref.watch(preferencesProvider).activeCurrency.symbol;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final inputDecoration = InputDecoration(
@@ -201,8 +222,9 @@ class _TransferScreenState extends ConsumerState<TransferScreen> {
                     children: [
                       const Text('Available Balance', style: TextStyle(color: Colors.white70, fontSize: 14)),
                       const SizedBox(height: 8),
-                      Text(
-                        '₱ ${sourceAccount.availableBalance.toStringAsFixed(2)}',
+                      MoneyText(
+                        sourceAccount.availableBalance,
+                        currencyCode: sourceAccount.currencyCode,
                         style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 16),
@@ -234,7 +256,7 @@ class _TransferScreenState extends ConsumerState<TransferScreen> {
                   ],
                   style: TextStyle(color: isDark ? Colors.white : Colors.black),
                   decoration: inputDecoration.copyWith(
-                    prefixText: '₱ ',
+                    prefixText: '$activeSymbol ',
                     prefixStyle: TextStyle(color: isDark ? Colors.white : Colors.black, fontSize: 16),
                     hintText: '0.00',
                   ),
@@ -257,11 +279,11 @@ class _TransferScreenState extends ConsumerState<TransferScreen> {
                 const SizedBox(height: 32),
                 SizedBox(
                   width: double.infinity,
-                  height: 54,
+                  height: 52,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: isDark ? const Color(0xFF4A4A7A) : const Color(0xFF003366),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.pill)),
                     ),
                     onPressed: _submitting ? null : () => _submit(sourceAccount),
                     child: _submitting

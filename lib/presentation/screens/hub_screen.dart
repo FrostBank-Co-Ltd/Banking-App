@@ -82,17 +82,17 @@ class HubScreen extends ConsumerWidget {
               children: const [
                 Expanded(
                   child: HubTile(
-                    icon: Icons.savings_rounded,
-                    label: 'Savings',
-                    route: '/savings',
+                    icon: Icons.credit_card_rounded,
+                    label: 'Cards',
+                    route: '/cards',
                   ),
                 ),
                 SizedBox(width: Space.x3),
                 Expanded(
                   child: HubTile(
-                    icon: Icons.currency_bitcoin_rounded,
-                    label: 'Crypto',
-                    route: '/crypto',
+                    icon: Icons.savings_rounded,
+                    label: 'Savings',
+                    route: '/savings',
                   ),
                 ),
               ],
@@ -102,18 +102,34 @@ class HubScreen extends ConsumerWidget {
               children: const [
                 Expanded(
                   child: HubTile(
+                    icon: Icons.currency_bitcoin_rounded,
+                    label: 'Crypto',
+                    route: '/crypto',
+                  ),
+                ),
+                SizedBox(width: Space.x3),
+                Expanded(
+                  child: HubTile(
                     icon: Icons.groups_rounded,
                     label: 'Split Bills',
                     route: '/split-bills',
                   ),
                 ),
-                SizedBox(width: Space.x3),
+              ],
+            ),
+            const SizedBox(height: Space.x3),
+            Row(
+              children: const [
                 Expanded(
                   child: HubTile(
                     icon: Icons.directions_run_rounded,
                     label: 'Netkeiba JRA',
                     route: '/netkeiba',
                   ),
+                ),
+                SizedBox(width: Space.x3),
+                Expanded(
+                  child: SizedBox(),
                 ),
               ],
             ),

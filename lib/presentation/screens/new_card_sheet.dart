@@ -17,6 +17,8 @@ Future<void> showNewCardSheet(BuildContext context) =>
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
+      enableDrag: true,
+      isDismissible: true,
       backgroundColor: Colors.transparent,
       builder: (_) => const NewCardSheet(),
     );
@@ -81,6 +83,11 @@ class _NewCardSheetState extends ConsumerState<NewCardSheet> {
     final accountId = _accountId ?? accounts.first.id;
     final label = _valueOf(_label, _fallbackLabel);
 
+    final profile = ref.read(profileProvider).value;
+    final signedInName = (profile?.fullName != null && profile!.fullName.trim().isNotEmpty)
+        ? profile.fullName.trim()
+        : _fallbackHolder;
+
     setState(() => _working = true);
 
     final ok = await ref
@@ -88,7 +95,7 @@ class _NewCardSheetState extends ConsumerState<NewCardSheet> {
         .createCard(
           accountId: accountId,
           label: label,
-          holderName: _valueOf(_holder, _fallbackHolder),
+          holderName: signedInName,
           number: _valueOf(_number, _fallbackNumber),
           cvc: _valueOf(_cvc, _fallbackCvc),
           expiry: _valueOf(_expiry, _fallbackExpiry),
@@ -123,6 +130,13 @@ class _NewCardSheetState extends ConsumerState<NewCardSheet> {
   Widget build(BuildContext context) {
     final tokens = context.tokens;
     final accounts = ref.watch(accountsProvider);
+    final profile = ref.watch(profileProvider).value;
+    final signedInName = (profile?.fullName != null && profile!.fullName.trim().isNotEmpty)
+        ? profile.fullName.trim()
+        : _fallbackHolder;
+
+    _holder.text = signedInName;
+
     final rows = accounts.hasValue
         ? accounts.requireValue
         : const <Account>[];
@@ -141,9 +155,10 @@ class _NewCardSheetState extends ConsumerState<NewCardSheet> {
       child: SafeArea(
         top: false,
         child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(
             Space.x5,
-            Space.x5,
+            Space.x3,
             Space.x5,
             Space.x3,
           ),
@@ -155,7 +170,7 @@ class _NewCardSheetState extends ConsumerState<NewCardSheet> {
                 child: Container(
                   width: 36,
                   height: 4,
-                  margin: const EdgeInsets.only(bottom: Space.x4),
+                  margin: const EdgeInsets.only(bottom: Space.x3),
                   decoration: BoxDecoration(
                     color: tokens.border,
                     borderRadius: AppRadius.all(AppRadius.pill),
@@ -163,15 +178,27 @@ class _NewCardSheetState extends ConsumerState<NewCardSheet> {
                 ),
               ),
 
-              Text(
-                'Add a card',
-                style: AppType.headlineMedium.copyWith(
-                  color: tokens.textPrimary,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Add a card',
+                    style: AppType.headlineMedium.copyWith(
+                      color: tokens.textPrimary,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: Icon(
+                      Icons.close_rounded,
+                      color: tokens.textSecondary,
+                    ),
+                    tooltip: 'Cancel and exit',
+                  ),
+                ],
               ),
-              const SizedBox(height: Space.x1),
               Text(
-                'Nothing is checked in this build. Any details will do.',
+                'Enter details to issue a new card to your account.',
                 style: AppType.bodySmall.copyWith(color: tokens.textSecondary),
               ),
 
@@ -217,6 +244,7 @@ class _NewCardSheetState extends ConsumerState<NewCardSheet> {
                 label: 'Card holder',
                 hint: _fallbackHolder,
                 capitalization: TextCapitalization.words,
+                readOnly: true,
               ),
               const SizedBox(height: Space.x4),
 
@@ -271,20 +299,29 @@ class _NewCardSheetState extends ConsumerState<NewCardSheet> {
 
               const SizedBox(height: Space.x5),
 
-              FilledButton(
-                onPressed: _working || rows.isEmpty
-                    ? null
-                    : () => _submit(rows),
-                child: _working
-                    ? const SizedBox(
-                        height: 18,
-                        width: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Text('Add card'),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: FilledButton(
+                  onPressed: _working || rows.isEmpty
+                      ? null
+                      : () => _submit(rows),
+                  style: FilledButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: AppRadius.all(AppRadius.pill),
+                    ),
+                  ),
+                  child: _working
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Add card'),
+                ),
               ),
 
               const SizedBox(height: Space.x2),
@@ -307,6 +344,7 @@ class _Field extends StatelessWidget {
     this.formatters,
     this.mono = false,
     this.prefix,
+    this.readOnly = false,
   });
 
   final TextEditingController controller;
@@ -324,6 +362,7 @@ class _Field extends StatelessWidget {
   final bool mono;
 
   final String? prefix;
+  final bool readOnly;
 
   @override
   Widget build(BuildContext context) => TextField(
@@ -331,6 +370,8 @@ class _Field extends StatelessWidget {
     keyboardType: keyboardType,
     textCapitalization: capitalization,
     inputFormatters: formatters,
+    readOnly: readOnly,
+    enabled: !readOnly,
     style: mono
         ? AppType.numericMedium.copyWith(color: context.tokens.textPrimary)
         : null,
@@ -338,6 +379,13 @@ class _Field extends StatelessWidget {
       labelText: label,
       hintText: hint,
       prefixText: prefix,
+      suffixIcon: readOnly
+          ? Icon(
+              Icons.lock_outline_rounded,
+              color: context.tokens.textSecondary,
+              size: 18,
+            )
+          : null,
     ),
   );
 }

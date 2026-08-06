@@ -223,24 +223,24 @@ ALTER TABLE public.goal_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.split_bills ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.split_bill_participants ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Allow read profiles" ON public.profiles FOR SELECT USING (true);
-CREATE POLICY "Allow read accounts" ON public.accounts FOR SELECT USING (true);
-CREATE POLICY "Allow read cards" ON public.cards FOR SELECT USING (true);
-CREATE POLICY "Allow read transactions" ON public.transactions FOR SELECT USING (true);
+CREATE POLICY "Allow read profiles" ON public.profiles FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "Allow read accounts" ON public.accounts FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Allow read cards" ON public.cards FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Allow read transactions" ON public.transactions FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Allow read promos" ON public.promos FOR SELECT USING (true);
-CREATE POLICY "Allow read goal_saves" ON public.goal_saves FOR SELECT USING (true);
-CREATE POLICY "Allow read goal_transactions" ON public.goal_transactions FOR SELECT USING (true);
-CREATE POLICY "Allow read split_bills" ON public.split_bills FOR SELECT USING (true);
-CREATE POLICY "Allow read split_bill_participants" ON public.split_bill_participants FOR SELECT USING (true);
+CREATE POLICY "Allow read goal_saves" ON public.goal_saves FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Allow read goal_transactions" ON public.goal_transactions FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Allow read split_bills" ON public.split_bills FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Allow read split_bill_participants" ON public.split_bill_participants FOR SELECT USING (EXISTS (SELECT 1 FROM public.split_bills WHERE id = bill_id AND user_id = auth.uid()));
 
-CREATE POLICY "Allow write profiles" ON public.profiles FOR ALL USING (true);
-CREATE POLICY "Allow write accounts" ON public.accounts FOR ALL USING (true);
-CREATE POLICY "Allow write cards" ON public.cards FOR ALL USING (true);
-CREATE POLICY "Allow write transactions" ON public.transactions FOR ALL USING (true);
-CREATE POLICY "Allow write goal_saves" ON public.goal_saves FOR ALL USING (true);
-CREATE POLICY "Allow write goal_transactions" ON public.goal_transactions FOR ALL USING (true);
-CREATE POLICY "Allow write split_bills" ON public.split_bills FOR ALL USING (true);
-CREATE POLICY "Allow write split_bill_participants" ON public.split_bill_participants FOR ALL USING (true);
+CREATE POLICY "Allow write profiles" ON public.profiles FOR ALL USING (auth.uid() = id);
+CREATE POLICY "Allow write accounts" ON public.accounts FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Allow write cards" ON public.cards FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Allow write transactions" ON public.transactions FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Allow write goal_saves" ON public.goal_saves FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Allow write goal_transactions" ON public.goal_transactions FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Allow write split_bills" ON public.split_bills FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Allow write split_bill_participants" ON public.split_bill_participants FOR ALL USING (EXISTS (SELECT 1 FROM public.split_bills WHERE id = bill_id AND user_id = auth.uid()));
 
 -- ════════════════════════════════════════════════════════════════════
 -- STEP 6: RE-SEED FRESH PUBLIC DATA

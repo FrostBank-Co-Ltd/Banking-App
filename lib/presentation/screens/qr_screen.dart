@@ -3,9 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:mobile_scanner/mobile_scanner.dart'; 
+import '../../core/design/tokens.dart';
+import '../../core/format/money.dart';
 import '../../domain/models.dart'; 
 import '../../domain/repositories.dart'; 
 import '../../state/providers.dart'; 
+import '../widgets/money_text.dart'; 
 
 class QRScreen extends ConsumerStatefulWidget {
   const QRScreen({super.key});
@@ -48,8 +51,11 @@ class _QRScreenState extends ConsumerState<QRScreen> with SingleTickerProviderSt
 
   void _updateGeneratedQR() {
     final rawVal = double.tryParse(_amountInputController.text) ?? 0.0;
+    final prefs = ref.read(preferencesProvider);
+    final symbol = prefs.activeCurrency.symbol;
+    final code = prefs.currencyCode;
     setState(() {
-      _generatedQRText = 'PHP ${rawVal.toStringAsFixed(2).replaceAllMapped(
+      _generatedQRText = '$code $symbol${rawVal.toStringAsFixed(2).replaceAllMapped(
         RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
         (Match m) => '${m[1]},',
       )}';
@@ -132,7 +138,7 @@ class _QRScreenState extends ConsumerState<QRScreen> with SingleTickerProviderSt
                       const Text('Available Balance', style: TextStyle(color: Colors.white70, fontSize: 12)),
                       const SizedBox(height: 4),
                       Text(
-                        '₱ ${selectedAccount.availableBalance.toStringAsFixed(2)}',
+                        '\$${selectedAccount.availableBalance.toStringAsFixed(2)}',
                         style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
@@ -143,7 +149,7 @@ class _QRScreenState extends ConsumerState<QRScreen> with SingleTickerProviderSt
                 ),
                 
                 const SizedBox(height: 16),
-                const Text('A default of ₱100.00 will be deducted for this hackathon POC.', style: TextStyle(color: Colors.redAccent, fontSize: 12)),
+                const Text('A default of \$100.00 will be deducted for this hackathon POC.', style: TextStyle(color: Colors.redAccent, fontSize: 12)),
               ],
             ),
           ),
@@ -177,7 +183,7 @@ class _QRScreenState extends ConsumerState<QRScreen> with SingleTickerProviderSt
     const double qrAmount = 100.0;
     
     if (sourceAccount.availableBalance < qrAmount) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Insufficient funds for ₱100.00 deduction.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Insufficient funds for \$100.00 deduction.')));
       setState(() => _isProcessingQR = false);
       _scannerController.start();
       return;
@@ -220,7 +226,7 @@ class _QRScreenState extends ConsumerState<QRScreen> with SingleTickerProviderSt
             const SizedBox(height: 16),
             Text('Payment Sent!', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
             const SizedBox(height: 8),
-            Text('₱100.00 has been successfully deducted from $accountName.', textAlign: TextAlign.center, style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)),
+            Text('\$100.00 has been successfully deducted from $accountName.', textAlign: TextAlign.center, style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
@@ -343,13 +349,13 @@ class _QRScreenState extends ConsumerState<QRScreen> with SingleTickerProviderSt
                   onChanged: (_) => _updateGeneratedQR(),
                   style: TextStyle(color: isDark ? Colors.white : Colors.black),
                   decoration: inputDecoration.copyWith(
-                    prefixText: '₱ ',
+                    prefixText: '\$ ',
                     prefixStyle: TextStyle(color: isDark ? Colors.white : Colors.black, fontSize: 16),
                     hintText: '0.00',
                   ),
                 ),
                 const SizedBox(height: 40),
-                if (_generatedQRText.isNotEmpty && _generatedQRText != 'PHP 0.00') ...[
+                if (_generatedQRText.isNotEmpty && _generatedQRText != 'USD \$0.00') ...[
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(

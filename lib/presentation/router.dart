@@ -54,19 +54,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       final session = ref.read(sessionProvider);
       final location = state.matchedLocation;
 
-      const unauthenticated = {'/login', '/register'};
+      const authRoutes = {'/login', '/register', '/pin-lock'};
 
       return switch (session) {
         SessionUnknown() => location == '/splash' ? null : '/splash',
         SessionSignedOut() =>
-          unauthenticated.contains(location) ? null : '/login',
+          authRoutes.contains(location) ? null : '/login',
         SessionSignedIn() =>
-          location == '/login' ||
-                  location == '/register' ||
-                  location == '/splash' ||
-                  location == '/ad'
-              ? '/pin-lock'
-              : null,
+          (location == '/splash' || location == '/ad') ? '/pin-lock' : null,
       };
     },
     errorBuilder: (context, state) =>

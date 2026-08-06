@@ -51,15 +51,20 @@ class _PinLockScreenState extends ConsumerState<PinLockScreen> {
 
     await Future<void>.delayed(const Duration(milliseconds: 200));
 
-    // Default valid PIN is 123456 or profile PIN
-    const validPin = '123456';
-    if (_pin == validPin || _pin.length == 6) {
+    final profileAsync = ref.read(profileProvider);
+    final expectedPin = profileAsync.value?.pinCode ?? '123456';
+
+    if (_pin == expectedPin || _pin == '123456') {
       try {
         final session = ref.read(sessionProvider);
         if (session is! SessionSignedIn) {
+          final preferences = ref.read(preferencesProvider);
+          final emailToUse = preferences.rememberedEmail ?? 'ava.mercado@frostbank.app';
+          final passwordToUse = emailToUse == 'ava.mercado@frostbank.app' ? 'frost2026' : 'ive2026';
+          
           await ref.read(sessionProvider.notifier).signIn(
-                email: 'ava.mercado@frostbank.app',
-                password: 'frost2026',
+                email: emailToUse,
+                password: passwordToUse,
               );
         }
         if (mounted) context.go('/');
@@ -214,7 +219,10 @@ class _PinLockScreenState extends ConsumerState<PinLockScreen> {
                               color: Colors.white,
                               size: 22,
                             ),
-                            onTap: () => context.go('/login'),
+                            onTap: () async {
+                              await ref.read(sessionProvider.notifier).signOut();
+                              if (context.mounted) context.go('/login');
+                            },
                           ),
                           _KeypadButton(
                             label: '0',
@@ -235,13 +243,17 @@ class _PinLockScreenState extends ConsumerState<PinLockScreen> {
 
                   const SizedBox(height: Space.x6),
 
-                  // Password Sign In Button
-                  TextButton(
-                    onPressed: () => context.go('/login'),
+                  // Password Sign In / Switch Account Button
+                  TextButton.icon(
+                    onPressed: () async {
+                      await ref.read(sessionProvider.notifier).signOut();
+                      if (context.mounted) context.go('/login');
+                    },
                     style: TextButton.styleFrom(
                       foregroundColor: Colors.white.withValues(alpha: 0.8),
                     ),
-                    child: const Text('Use password instead'),
+                    icon: const Icon(Icons.swap_horiz_rounded, size: 18),
+                    label: const Text('Switch Account / Use Password'),
                   ),
                 ],
               ),

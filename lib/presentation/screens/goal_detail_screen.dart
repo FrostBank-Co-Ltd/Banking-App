@@ -575,22 +575,76 @@ class _CloseGoalButton extends ConsumerWidget {
   }
 
   Future<void> _confirmClose(BuildContext context, WidgetRef ref) async {
+    final tokens = context.tokens;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Close goal save?'),
+        backgroundColor: tokens.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(Space.x2),
+              decoration: BoxDecoration(
+                color: tokens.error.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.savings_outlined, color: tokens.error, size: 22),
+            ),
+            const SizedBox(width: Space.x3),
+            Expanded(
+              child: Text(
+                'Close goal save?',
+                style: AppType.titleMedium.copyWith(color: tokens.textPrimary),
+              ),
+            ),
+          ],
+        ),
         content: Text(
-          'Your balance of ${Money.format(goal.balance)} will be '
-          'returned to your savings account.',
+          'Your balance of ${Money.format(goal.balance)} will be returned to your account.',
+          style: AppType.bodyMedium.copyWith(color: tokens.textSecondary),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(
+          Space.x4,
+          0,
+          Space.x4,
+          Space.x4,
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Close goal'),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: tokens.textPrimary,
+                    side: BorderSide(color: tokens.border),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: Space.x3),
+                  ),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: Space.x3),
+              Expanded(
+                child: FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: tokens.error,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: Space.x3),
+                  ),
+                  child: const Text('Close Goal'),
+                ),
+              ),
+            ],
           ),
         ],
       ),

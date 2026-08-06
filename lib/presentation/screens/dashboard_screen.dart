@@ -488,7 +488,7 @@ class _CardThumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Pressable(
-    onTap: () => context.push('/card/${card.id}'),
+    onTap: () => context.go('/cards'),
     semanticLabel:
         '${card.label}, ${card.kind.label} ${card.network.label} '
         'ending ${card.last4}, ${card.status.label}',
@@ -549,7 +549,7 @@ class _QuickAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = context.tokens;
-    final isBranch = route.startsWith('/activity');
+    final isBranch = route.startsWith('/activity') || route.startsWith('/cards');
     return Pressable(
       onTap: () => isBranch ? context.go(route) : context.push(route),
       semanticLabel: label.toLowerCase(),
@@ -603,17 +603,17 @@ class _FinanceHub extends StatelessWidget {
         children: const [
           Expanded(
             child: HubTile(
-              icon: Icons.savings_rounded,
-              label: 'Savings',
-              route: '/savings',
+              icon: Icons.credit_card_rounded,
+              label: 'Cards',
+              route: '/cards',
             ),
           ),
           SizedBox(width: Space.x3),
           Expanded(
             child: HubTile(
-              icon: Icons.currency_bitcoin_rounded,
-              label: 'Crypto',
-              route: '/crypto',
+              icon: Icons.savings_rounded,
+              label: 'Savings',
+              route: '/savings',
             ),
           ),
         ],
@@ -623,18 +623,34 @@ class _FinanceHub extends StatelessWidget {
         children: const [
           Expanded(
             child: HubTile(
-              icon: Icons.groups_rounded,
-              label: 'Split Bills',
-              route: '/split-bills',
+              icon: Icons.currency_bitcoin_rounded,
+              label: 'Crypto',
+              route: '/crypto',
             ),
           ),
           SizedBox(width: Space.x3),
           Expanded(
             child: HubTile(
-              icon: Icons.schedule_rounded,
-              label: 'Time Deposit',
-              route: '/soon/time-deposit',
+              icon: Icons.groups_rounded,
+              label: 'Split Bills',
+              route: '/split-bills',
             ),
+          ),
+        ],
+      ),
+      const SizedBox(height: Space.x3),
+      Row(
+        children: const [
+          Expanded(
+            child: HubTile(
+              icon: Icons.directions_run_rounded,
+              label: 'Netkeiba JRA',
+              route: '/netkeiba',
+            ),
+          ),
+          SizedBox(width: Space.x3),
+          Expanded(
+            child: SizedBox(),
           ),
         ],
       ),
@@ -658,8 +674,9 @@ class HubTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = context.tokens;
+    final isBranch = route == '/cards' || route == '/activity' || route == '/hub' || route == '/profile';
     return Pressable(
-      onTap: () => context.push(route),
+      onTap: () => isBranch ? context.go(route) : context.push(route),
       semanticLabel: label,
       borderRadius: AppRadius.lg,
       child: SoftCard(
@@ -717,7 +734,7 @@ class _RecentTransactions extends ConsumerWidget {
             message: 'Transactions on this account will appear here.',
             actionLabel: 'Add funds',
             icon: Icons.receipt_long_rounded,
-            onAction: () => context.push('/soon/deposit'),
+            onAction: () => context.push('/deposit'),
           ),
           builder: (data) => GroupedTransactions(
             rows: data,

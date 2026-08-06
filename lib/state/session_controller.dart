@@ -34,6 +34,14 @@ class SessionController extends Notifier<SessionState> {
 
   AuthRepository get _auth => ref.read(authRepositoryProvider);
 
+  void _invalidateUserData() {
+    ref.invalidate(profileProvider);
+    ref.invalidate(accountsProvider);
+    ref.invalidate(cardsProvider);
+    ref.invalidate(goalsProvider);
+    ref.invalidate(selectedAccountIdProvider);
+  }
+
   /// Called once by the splash screen.
   Future<void> restore() async {
     try {
@@ -41,21 +49,21 @@ class SessionController extends Notifier<SessionState> {
       state = profile == null
           ? const SessionSignedOut()
           : SessionSignedIn(profile);
+      _invalidateUserData();
     } on Object {
       state = const SessionSignedOut(
         notice: 'We could not restore your session. Please sign in again.',
       );
+      _invalidateUserData();
     }
   }
 
-  /// Demo sign in. Nothing is validated in this build, so any entry opens the
-  /// seeded profile.
   Future<void> signIn({required String email, required String password}) async {
     final profile = await _auth.signIn(email: email, password: password);
     state = SessionSignedIn(profile);
+    _invalidateUserData();
   }
 
-  /// Demo sign up. Carries the entered details into the seeded profile.
   Future<void> signUp({
     required String fullName,
     required String email,
@@ -69,10 +77,13 @@ class SessionController extends Notifier<SessionState> {
       password: password,
     );
     state = SessionSignedIn(profile);
+    _invalidateUserData();
   }
 
   Future<void> signOut() async {
     await _auth.signOut();
+    ref.read(preferencesProvider.notifier).clearRememberedEmail();
     state = const SessionSignedOut();
+    _invalidateUserData();
   }
 }

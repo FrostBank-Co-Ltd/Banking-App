@@ -161,7 +161,8 @@ class SupabaseAccountRepository implements AccountRepository {
   Future<List<Account>> fetchAccounts() async {
     try {
       final user = _client.auth.currentUser;
-      final userId = user?.id ?? MockSeed.customerId;
+      if (user == null) throw const RepositoryFailure('User not authenticated');
+      final userId = user.id;
       final response = await _client
           .from('accounts')
           .select()
@@ -372,7 +373,8 @@ class SupabaseCardRepository implements CardRepository {
   Future<List<BankCard>> fetchCards() async {
     try {
       final user = _client.auth.currentUser;
-      final userId = user?.id ?? MockSeed.customerId;
+      if (user == null) throw const RepositoryFailure('User not authenticated');
+      final userId = user.id;
       // Ordered, and this is not cosmetic. Postgres makes no promise about the
       // order of rows without an ORDER BY, and an update rewrites the row, so
       // freezing a card was enough to move it in the result set: the deck kept
@@ -396,8 +398,7 @@ class SupabaseCardRepository implements CardRepository {
           .toList();
       return list;
     } catch (e) {
-      debugPrint('Could not load cards from Supabase: $e');
-      return MockSeed.cards;
+      throw RepositoryFailure('Could not load cards from Supabase: $e');
     }
   }
 
@@ -412,12 +413,11 @@ class SupabaseCardRepository implements CardRepository {
       if (response != null) {
         return SupabaseMappers.cardFromMap(response);
       }
+      throw const RepositoryFailure('That card is no longer available.');
     } catch (e) {
-      debugPrint('Could not fetch card from Supabase: $e');
+      if (e is RepositoryFailure) rethrow;
+      throw RepositoryFailure('Could not fetch card from Supabase: $e');
     }
-    final match = MockSeed.cards.where((card) => card.id == id).firstOrNull;
-    if (match != null) return match;
-    throw const RepositoryFailure('That card is no longer available.');
   }
 
   @override
@@ -512,13 +512,8 @@ class SupabaseCardRepository implements CardRepository {
         status: newStatus == 'frozen' ? CardStatus.frozen : CardStatus.active,
       );
     } catch (e) {
-      debugPrint('Supabase toggle card freeze error: $e');
-      final card = await fetchCard(cardId);
-      return card.copyWith(
-        status: card.status == CardStatus.active
-            ? CardStatus.frozen
-            : CardStatus.active,
-      );
+      if (e is RepositoryFailure) rethrow;
+      throw RepositoryFailure('Supabase toggle card freeze error: $e');
     }
   }
 
@@ -532,9 +527,8 @@ class SupabaseCardRepository implements CardRepository {
           .eq('id', cardId);
       return card.copyWith(spendingLimit: limit);
     } catch (e) {
-      debugPrint('Supabase update limit error: $e');
-      final card = await fetchCard(cardId);
-      return card.copyWith(spendingLimit: limit);
+      if (e is RepositoryFailure) rethrow;
+      throw RepositoryFailure('Supabase update limit error: $e');
     }
   }
 }
@@ -549,7 +543,8 @@ class SupabaseTransactionRepository implements TransactionRepository {
   Future<List<Txn>> fetchTransactions({String? accountId}) async {
     try {
       final user = _client.auth.currentUser;
-      final userId = user?.id ?? MockSeed.customerId;
+      if (user == null) throw const RepositoryFailure('User not authenticated');
+      final userId = user.id;
       var query = _client.from('transactions').select();
       if (accountId != null) {
         query = query.eq('account_id', accountId);
@@ -622,29 +617,23 @@ class SupabaseProfileRepository implements ProfileRepository {
   Future<UserProfile> fetchProfile() async {
     try {
       final user = _client.auth.currentUser;
-      if (user != null) {
-        final profileById = await _client
-            .from('profiles')
-            .select()
-            .eq('id', user.id)
-            .maybeSingle();
-        if (profileById != null) {
-          return SupabaseMappers.profileFromMap(profileById);
-        }
+      if (user == null) {
+        throw const RepositoryFailure('User not authenticated.');
       }
 
-      final firstProfile = await _client
+      final profileById = await _client
           .from('profiles')
           .select()
-          .limit(1)
+          .eq('id', user.id)
           .maybeSingle();
-      if (firstProfile != null) {
-        return SupabaseMappers.profileFromMap(firstProfile);
+
+      if (profileById != null) {
+        return SupabaseMappers.profileFromMap(profileById);
       }
 
-      return MockSeed.profile;
+      throw const RepositoryFailure('Could not find user profile in Supabase.');
     } catch (e) {
-      return MockSeed.profile;
+      throw RepositoryFailure('Could not load profile from Supabase: $e');
     }
   }
 
@@ -771,7 +760,8 @@ class SupabaseSavingsGoalRepository implements SavingsGoalRepository {
   Future<List<GoalSave>> fetchGoals() async {
     try {
       final user = _client.auth.currentUser;
-      final userId = user?.id ?? MockSeed.customerId;
+      if (user == null) throw const RepositoryFailure('User not authenticated');
+      final userId = user.id;
       final response = await _client
           .from('goal_saves')
           .select()
@@ -993,7 +983,8 @@ class SupabaseSplitBillRepository implements SplitBillRepository {
   Future<List<SplitBill>> fetchSplitBills() async {
     try {
       final user = _client.auth.currentUser;
-      final userId = user?.id ?? MockSeed.customerId;
+      if (user == null) throw const RepositoryFailure('User not authenticated');
+      final userId = user.id;
       final billsRes = await _client
           .from('split_bills')
           .select()
@@ -1284,16 +1275,7 @@ class SupabaseAuthRepository implements AuthRepository {
       debugPrint('Supabase signIn auth note: $e');
     }
 
-    // Dev/Demo fallback: Return active customer profile
-    final base = MockSeed.profile;
-    return UserProfile(
-      id: base.id,
-      fullName: base.fullName,
-      email: email.isEmpty ? base.email : email,
-      mobile: base.mobile,
-      memberSince: base.memberSince,
-      pinCode: base.pinCode,
-    );
+    throw const RepositoryFailure('Authentication failed.');
   }
 
   @override
@@ -1327,7 +1309,7 @@ class SupabaseAuthRepository implements AuthRepository {
         final existingAccounts = await _client
             .from('accounts')
             .select()
-            .limit(1);
+            .eq('user_id', userId);
         if ((existingAccounts as List).isEmpty) {
           final defaultWallet = {
             'id': 'acc_wallet_$userId',
