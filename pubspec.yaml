@@ -28,10 +28,8 @@ flutter:
   uses-material-design: true
 
   assets:
-    # Card scheme artwork. Third party trademarks, bundled for presentation only.
-    - assets/brand/visa.webp
-
-  assets:
+    # assets/brand holds the FrostBank mark and the card scheme artwork. The
+    # scheme marks are third party trademarks, bundled for presentation only.
     - assets/brand/
     - assets/images/
 
