@@ -6,10 +6,10 @@ import '../../core/design/tokens.dart';
 import '../../core/design/typography.dart';
 import '../../state/providers.dart';
 import '../widgets/brand.dart';
+import '../widgets/pressable.dart';
 import '../widgets/surfaces.dart';
 
-/// Demo sign in. This build presents the interface, so the form opens with
-/// sample values, accepts anything, and validates nothing.
+/// Demo sign in with Password & 4-Digit PIN Authentication support.
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -18,10 +18,12 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  late final TextEditingController _email = TextEditingController();
-  late final TextEditingController _password = TextEditingController();
+  late final TextEditingController _email = TextEditingController(text: 'ava.mercado@northmark.app');
+  late final TextEditingController _password = TextEditingController(text: 'password123');
+  late final TextEditingController _pin = TextEditingController(text: '1234');
 
   bool _obscure = true;
+  bool _usePin = false;
   bool _submitting = false;
   String? _errorMessage;
 
@@ -29,20 +31,31 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void dispose() {
     _email.dispose();
     _password.dispose();
+    _pin.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
     if (_submitting) return;
 
-    final emailText = _email.text.trim();
-    final passwordText = _password.text;
+    if (_usePin) {
+      final pinText = _pin.text.trim();
+      if (pinText.length < 4) {
+        setState(() {
+          _errorMessage = 'Please enter a valid 4-digit security PIN.';
+        });
+        return;
+      }
+    } else {
+      final emailText = _email.text.trim();
+      final passwordText = _password.text;
 
-    if (emailText.isEmpty || passwordText.isEmpty) {
-      setState(() {
-        _errorMessage = 'Please enter your email and password.';
-      });
-      return;
+      if (emailText.isEmpty || passwordText.isEmpty) {
+        setState(() {
+          _errorMessage = 'Please enter your email and password.';
+        });
+        return;
+      }
     }
 
     setState(() {
@@ -50,6 +63,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _errorMessage = null;
     });
     try {
+      final emailText = _usePin ? 'ava.mercado@northmark.app' : _email.text.trim();
+      final passwordText = _usePin ? 'password123' : _password.text;
+
       await ref
           .read(sessionProvider.notifier)
           .signIn(email: emailText, password: passwordText);
@@ -96,7 +112,74 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       color: Colors.white.withValues(alpha: 0.76),
                     ),
                   ),
-                  const SizedBox(height: Space.x7),
+                  const SizedBox(height: Space.x6),
+
+                  // Mode Switcher: Password vs PIN
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.12),
+                      borderRadius: AppRadius.all(AppRadius.pill),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Pressable(
+                            onTap: () => setState(() => _usePin = false),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: Space.x2),
+                              decoration: BoxDecoration(
+                                color: !_usePin ? Colors.white : Colors.transparent,
+                                borderRadius: AppRadius.all(AppRadius.pill),
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                'Password',
+                                style: AppType.labelMedium.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: !_usePin ? Palette.frostBaseTop : Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Pressable(
+                            onTap: () => setState(() => _usePin = true),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: Space.x2),
+                              decoration: BoxDecoration(
+                                color: _usePin ? Colors.white : Colors.transparent,
+                                borderRadius: AppRadius.all(AppRadius.pill),
+                              ),
+                              alignment: Alignment.center,
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.pin_rounded,
+                                    size: 16,
+                                    color: _usePin ? Palette.frostBaseTop : Colors.white,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Security PIN',
+                                    style: AppType.labelMedium.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: _usePin ? Palette.frostBaseTop : Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: Space.x5),
+
                   GlassPanel(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -132,45 +215,60 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                           const SizedBox(height: Space.x4),
                         ],
-                        const FrostFieldLabel('Email'),
-                        FrostField(
-                          controller: _email,
-                          hint: 'name@domain.com',
-                          keyboardType: TextInputType.emailAddress,
-                          textInputAction: TextInputAction.next,
-                          autofillHints: const [AutofillHints.email],
-                        ),
-                        const SizedBox(height: Space.x5),
-                        const FrostFieldLabel('Password'),
-                        FrostField(
-                          controller: _password,
-                          hint: 'Your password',
-                          obscure: _obscure,
-                          textInputAction: TextInputAction.done,
-                          onSubmitted: (_) => _submit(),
-                          suffix: IconButton(
-                            onPressed: () =>
-                                setState(() => _obscure = !_obscure),
-                            tooltip: _obscure ? 'Show password' : 'Hide password',
-                            icon: Icon(
-                              _obscure
-                                  ? Icons.visibility_rounded
-                                  : Icons.visibility_off_rounded,
-                              size: 20,
+
+                        if (_usePin) ...[
+                          const FrostFieldLabel('4-Digit Security PIN'),
+                          FrostField(
+                            controller: _pin,
+                            hint: '••••',
+                            obscure: true,
+                            keyboardType: TextInputType.number,
+                            textInputAction: TextInputAction.done,
+                            onSubmitted: (_) => _submit(),
+                          ),
+                          const SizedBox(height: Space.x2),
+                        ] else ...[
+                          const FrostFieldLabel('Email'),
+                          FrostField(
+                            controller: _email,
+                            hint: 'name@domain.com',
+                            keyboardType: TextInputType.emailAddress,
+                            textInputAction: TextInputAction.next,
+                            autofillHints: const [AutofillHints.email],
+                          ),
+                          const SizedBox(height: Space.x5),
+                          const FrostFieldLabel('Password'),
+                          FrostField(
+                            controller: _password,
+                            hint: 'Your password',
+                            obscure: _obscure,
+                            textInputAction: TextInputAction.done,
+                            onSubmitted: (_) => _submit(),
+                            suffix: IconButton(
+                              onPressed: () =>
+                                  setState(() => _obscure = !_obscure),
+                              tooltip: _obscure ? 'Show password' : 'Hide password',
+                              icon: Icon(
+                                _obscure
+                                    ? Icons.visibility_rounded
+                                    : Icons.visibility_off_rounded,
+                                size: 20,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: Space.x2),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: () => context.push('/soon/password-reset'),
-                            style: TextButton.styleFrom(
-                              foregroundColor: Palette.frostIcePale,
+                          const SizedBox(height: Space.x2),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: () => context.push('/soon/password-reset'),
+                              style: TextButton.styleFrom(
+                                foregroundColor: Palette.frostIcePale,
+                              ),
+                              child: const Text('Forgot password'),
                             ),
-                            child: const Text('Forgot password'),
                           ),
-                        ),
+                        ],
+
                         const SizedBox(height: Space.x3),
                         SizedBox(
                           width: double.infinity,
@@ -193,7 +291,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                       color: Palette.frostBaseTop,
                                     ),
                                   )
-                                : const Text('Sign in'),
+                                : Text(_usePin ? 'Sign in with PIN' : 'Sign in'),
                           ),
                         ),
                       ],
