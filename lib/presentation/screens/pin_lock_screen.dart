@@ -59,9 +59,12 @@ class _PinLockScreenState extends ConsumerState<PinLockScreen> {
         final session = ref.read(sessionProvider);
         if (session is! SessionSignedIn) {
           final preferences = ref.read(preferencesProvider);
-          final emailToUse = preferences.rememberedEmail ?? 'ava.mercado@frostbank.app';
-          final passwordToUse = emailToUse == 'ava.mercado@frostbank.app' ? 'frost2026' : 'ive2026';
-          
+          final activeProfileEmail = ref.read(profileProvider).value?.email;
+          final emailToUse = (preferences.rememberedEmail != null && preferences.rememberedEmail!.isNotEmpty)
+              ? preferences.rememberedEmail!
+              : (activeProfileEmail ?? 'ava.mercado@frostbank.app');
+          final passwordToUse = emailToUse.toLowerCase() == 'ava.mercado@frostbank.app' ? 'frost2026' : 'ive2026';
+
           await ref.read(sessionProvider.notifier).signIn(
                 email: emailToUse,
                 password: passwordToUse,
@@ -116,7 +119,11 @@ class _PinLockScreenState extends ConsumerState<PinLockScreen> {
                   const SizedBox(height: Space.x2),
                   Builder(
                     builder: (context) {
-                      final email = ref.watch(preferencesProvider).rememberedEmail ?? 'ava.mercado@frostbank.app';
+                      final remembered = ref.watch(preferencesProvider).rememberedEmail;
+                      final activeProfileEmail = ref.watch(profileProvider).value?.email;
+                      final email = (remembered != null && remembered.isNotEmpty)
+                          ? remembered
+                          : (activeProfileEmail ?? 'ava.mercado@frostbank.app');
                       return Container(
                         padding: const EdgeInsets.symmetric(horizontal: Space.x3, vertical: Space.x1),
                         decoration: BoxDecoration(

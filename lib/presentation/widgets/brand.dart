@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/design/tokens.dart';
 import '../../core/design/typography.dart';
@@ -453,6 +454,8 @@ class FrostField extends StatelessWidget {
     this.textInputAction,
     this.onSubmitted,
     this.autofillHints,
+    this.inputFormatters,
+    this.maxLength,
     super.key,
   });
 
@@ -465,6 +468,8 @@ class FrostField extends StatelessWidget {
   final TextInputAction? textInputAction;
   final ValueChanged<String>? onSubmitted;
   final Iterable<String>? autofillHints;
+  final List<TextInputFormatter>? inputFormatters;
+  final int? maxLength;
 
   @override
   Widget build(BuildContext context) {
@@ -480,9 +485,12 @@ class FrostField extends StatelessWidget {
       textInputAction: textInputAction,
       onSubmitted: onSubmitted,
       autofillHints: autofillHints,
+      inputFormatters: inputFormatters,
+      maxLength: maxLength,
       cursorColor: Colors.white,
       style: AppType.bodyLarge.copyWith(color: Colors.white),
       decoration: InputDecoration(
+        counterText: '',
         hintText: hint,
         hintStyle: AppType.bodyMedium.copyWith(
           color: Colors.white.withValues(alpha: 0.56),
