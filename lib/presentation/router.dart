@@ -27,6 +27,7 @@ import 'screens/split_bills_screen.dart';
 import 'screens/transaction_detail_screen.dart';
 import 'screens/transaction_history_screen.dart';
 import 'shell/app_shell.dart';
+import 'shell/branch_transition.dart';
 
 //for routing to deposit, transfer, and qr
 import 'screens/deposit_screen.dart';
@@ -148,9 +149,17 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/qr-scanner',
         builder: (_, state) => const QRScreen(),
       ),
-      StatefulShellRoute.indexedStack(
+      // The plain indexedStack constructor is not used, because it hard codes an
+      // IndexedStack that swaps branches on a single frame. BranchTransition is
+      // that same always mounted container with a cross fade over the swap.
+      StatefulShellRoute(
         builder: (_, _, navigationShell) =>
             AppShell(navigationShell: navigationShell),
+        navigatorContainerBuilder: (_, navigationShell, children) =>
+            BranchTransition(
+              currentIndex: navigationShell.currentIndex,
+              children: children,
+            ),
         branches: [
           StatefulShellBranch(
             routes: [GoRoute(path: '/', builder: (_, _) => const DashboardScreen())],
