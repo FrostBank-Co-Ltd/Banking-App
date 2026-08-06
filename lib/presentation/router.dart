@@ -19,6 +19,7 @@ import 'screens/not_in_build_screen.dart';
 import 'screens/opening_ad_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/qr_scanner_screen.dart';
+import 'screens/pin_lock_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/savings_screen.dart';
 import 'screens/splash_screen.dart';
@@ -60,10 +61,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         SessionSignedOut() =>
           unauthenticated.contains(location) ? null : '/login',
         SessionSignedIn() =>
-          unauthenticated.contains(location) ||
+          location == '/login' ||
+                  location == '/register' ||
                   location == '/splash' ||
                   location == '/ad'
-              ? '/'
+              ? '/pin-lock'
               : null,
       };
     },
@@ -73,6 +75,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/splash', builder: (_, _) => const SplashScreen()),
       GoRoute(path: '/ad', builder: (_, _) => const OpeningAdScreen()),
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
+      GoRoute(path: '/pin-lock', builder: (_, _) => const PinLockScreen()),
       GoRoute(path: '/register', builder: (_, _) => const RegisterScreen()),
       GoRoute(
         path: '/account/:id',

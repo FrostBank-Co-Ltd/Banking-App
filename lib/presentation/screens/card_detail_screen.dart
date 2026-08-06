@@ -83,7 +83,7 @@ class _CardDetailScreenState extends ConsumerState<CardDetailScreen> {
               controller: controller,
               keyboardType: TextInputType.number,
               obscureText: true,
-              maxLength: 4,
+              maxLength: 6,
               autofocus: true,
               textAlign: TextAlign.center,
               style: AppType.numericHero.copyWith(
@@ -91,7 +91,7 @@ class _CardDetailScreenState extends ConsumerState<CardDetailScreen> {
                 letterSpacing: 8,
               ),
               decoration: InputDecoration(
-                hintText: '••••',
+                hintText: '••••••',
                 counterText: '',
                 filled: true,
                 fillColor: tokens.interactiveSecondary,
@@ -113,7 +113,7 @@ class _CardDetailScreenState extends ConsumerState<CardDetailScreen> {
           ),
           FilledButton(
             onPressed: () {
-              if (controller.text.trim().length == 4) {
+              if (controller.text.trim().length == 6) {
                 Navigator.of(ctx).pop(true);
               }
             },
@@ -143,7 +143,7 @@ class _CardDetailScreenState extends ConsumerState<CardDetailScreen> {
                 final ok = await _promptPinVerification(
                   context,
                   title: 'Security Verification',
-                  message: 'Enter your 4-digit PIN to reveal full card details.',
+                  message: 'Enter your 6-digit PIN to reveal full card details.',
                 );
                 if (ok && mounted) {
                   setState(() => _revealed = true);
@@ -297,7 +297,7 @@ class _CardDetailScreenState extends ConsumerState<CardDetailScreen> {
                                 context,
                                 title: 'Security PIN Required',
                                 message:
-                                    'Enter your 4-digit PIN to confirm card state update.',
+                                    'Enter your 6-digit PIN to confirm card state update.',
                               );
                               if (!okPin || !context.mounted) return;
 

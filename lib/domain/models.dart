@@ -660,6 +660,7 @@ class UserProfile {
     required this.email,
     required this.mobile,
     required this.memberSince,
+    this.pinCode = '123456',
   });
 
   final String id;
@@ -667,6 +668,7 @@ class UserProfile {
   final String email;
   final String mobile;
   final DateTime memberSince;
+  final String pinCode;
 
   String get initials {
     final parts = fullName.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();

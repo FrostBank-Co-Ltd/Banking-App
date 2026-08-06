@@ -15,6 +15,7 @@ abstract final class MockSeed {
     email: 'ava.mercado@frostbank.app',
     mobile: '+63 917 847 1928',
     memberSince: DateTime(2019, 4, 17),
+    pinCode: '123456',
   );
 
   /// Sample values the sign in and sign up forms open with. This build is a user

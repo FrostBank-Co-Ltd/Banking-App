@@ -32,6 +32,7 @@ class Preferences {
     this.themeMode = ThemeMode.system,
     this.balancesHidden = false,
     this.currencyCode = 'USD',
+    this.rememberedEmail = 'ava.mercado@frostbank.app',
   });
 
   final ThemeMode themeMode;
@@ -40,6 +41,9 @@ class Preferences {
   final bool balancesHidden;
 
   final String currencyCode;
+
+  /// Remembered user email for quick 6-digit PIN unlock on subsequent sign-ins.
+  final String? rememberedEmail;
 
   CurrencyOption get activeCurrency => supportedCurrencies.firstWhere(
         (c) => c.code == currencyCode,
@@ -50,11 +54,13 @@ class Preferences {
     ThemeMode? themeMode,
     bool? balancesHidden,
     String? currencyCode,
+    String? rememberedEmail,
   }) =>
       Preferences(
         themeMode: themeMode ?? this.themeMode,
         balancesHidden: balancesHidden ?? this.balancesHidden,
         currencyCode: currencyCode ?? this.currencyCode,
+        rememberedEmail: rememberedEmail ?? this.rememberedEmail,
       );
 }
 
@@ -70,4 +76,7 @@ class PreferencesController extends Notifier<Preferences> {
 
   void setCurrencyCode(String code) =>
       state = state.copyWith(currencyCode: code);
+
+  void setRememberedEmail(String? email) =>
+      state = state.copyWith(rememberedEmail: email);
 }
