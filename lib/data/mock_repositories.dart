@@ -47,6 +47,29 @@ class MockCardRepository implements CardRepository {
   Future<BankCard> fetchCard(String id) => _source.card(id);
 
   @override
+  Future<BankCard> createCard({
+    required String accountId,
+    required String label,
+    required String holderName,
+    required String number,
+    required String cvc,
+    required String expiry,
+    required CardNetwork network,
+    required CardKind kind,
+    required double spendingLimit,
+  }) => _source.createCard(
+    accountId: accountId,
+    label: label,
+    holderName: holderName,
+    number: number,
+    cvc: cvc,
+    expiry: expiry,
+    network: network,
+    kind: kind,
+    spendingLimit: spendingLimit,
+  );
+
+  @override
   Future<BankCard> toggleCardFreeze(String cardId) =>
       _source.toggleCardFreeze(cardId);
 

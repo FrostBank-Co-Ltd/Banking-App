@@ -156,6 +156,102 @@ final cardProvider = FutureProvider.family<BankCard, String>(
   (ref, id) => ref.watch(cardRepositoryProvider).fetchCard(id),
 );
 
+/// Async state for card writes.
+sealed class CardActionState {
+  const CardActionState();
+}
+
+class CardIdle extends CardActionState {
+  const CardIdle();
+}
+
+class CardWorking extends CardActionState {
+  const CardWorking();
+}
+
+class CardSuccess extends CardActionState {
+  const CardSuccess(this.card);
+
+  final BankCard card;
+}
+
+class CardError extends CardActionState {
+  const CardError(this.message);
+
+  final String message;
+}
+
+/// Handles writes on cards and invalidates the read providers afterwards, so the
+/// deck reflects the new state without the caller having to know which providers
+/// derive from which.
+///
+/// [accountCardsProvider] is not invalidated here: it watches [cardsProvider],
+/// so it recomputes on its own.
+class CardsController extends Notifier<CardActionState> {
+  @override
+  CardActionState build() => const CardIdle();
+
+  CardRepository get _repo => ref.read(cardRepositoryProvider);
+
+  /// Issues a card. Returns false and parks the reason in state on failure, the
+  /// same contract the savings writes use.
+  Future<bool> createCard({
+    required String accountId,
+    required String label,
+    required String holderName,
+    required String number,
+    required String cvc,
+    required String expiry,
+    required CardNetwork network,
+    required CardKind kind,
+    required double spendingLimit,
+  }) async {
+    state = const CardWorking();
+    try {
+      final card = await _repo.createCard(
+        accountId: accountId,
+        label: label,
+        holderName: holderName,
+        number: number,
+        cvc: cvc,
+        expiry: expiry,
+        network: network,
+        kind: kind,
+        spendingLimit: spendingLimit,
+      );
+      ref.invalidate(cardsProvider);
+      state = CardSuccess(card);
+      return true;
+    } on RepositoryFailure catch (e) {
+      state = CardError(e.message);
+      return false;
+    } catch (_) {
+      state = const CardError('Something went wrong. Please try again.');
+      return false;
+    }
+  }
+
+  Future<bool> toggleFreeze(String cardId) async {
+    state = const CardWorking();
+    try {
+      final card = await _repo.toggleCardFreeze(cardId);
+      ref.invalidate(cardsProvider);
+      ref.invalidate(cardProvider(cardId));
+      state = CardSuccess(card);
+      return true;
+    } on RepositoryFailure catch (e) {
+      state = CardError(e.message);
+      return false;
+    } catch (_) {
+      state = const CardError('Something went wrong. Please try again.');
+      return false;
+    }
+  }
+}
+
+final cardsControllerProvider =
+    NotifierProvider<CardsController, CardActionState>(CardsController.new);
+
 /// Pass null for every account.
 final transactionsProvider = FutureProvider.family<List<Txn>, String?>(
   (ref, accountId) => ref

@@ -40,6 +40,24 @@ abstract interface class CardRepository {
 
   Future<BankCard> fetchCard(String id);
 
+  /// Issue a card on [accountId].
+  ///
+  /// Every value is taken exactly as given and nothing is checked against a
+  /// scheme. This build is a user interface presentation, so any digits, any
+  /// expiry, and any security code produce a card that renders and behaves like
+  /// the seeded ones. Blank fields are the caller's business, not this layer's.
+  Future<BankCard> createCard({
+    required String accountId,
+    required String label,
+    required String holderName,
+    required String number,
+    required String cvc,
+    required String expiry,
+    required CardNetwork network,
+    required CardKind kind,
+    required double spendingLimit,
+  });
+
   /// Toggle card status between active and frozen.
   Future<BankCard> toggleCardFreeze(String cardId);
 

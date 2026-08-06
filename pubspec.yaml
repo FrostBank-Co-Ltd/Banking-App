@@ -28,6 +28,10 @@ flutter:
   uses-material-design: true
 
   assets:
+    # Card scheme artwork. Third party trademarks, bundled for presentation only.
+    - assets/brand/visa.webp
+
+  assets:
     - assets/brand/
     - assets/images/
 

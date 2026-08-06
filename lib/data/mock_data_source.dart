@@ -18,7 +18,8 @@ class MockDataSource {
       _profile = MockSeed.profile,
       _goals = MockSeed.goalSaves(now: now),
       _goalTxns = MockSeed.goalTransactions(now: now),
-      _goalCounter = MockSeed.goalSaves().length;
+      _goalCounter = MockSeed.goalSaves().length,
+      _cardCounter = MockSeed.cards.length;
 
   final Random _random;
   final List<Account> _accounts;
@@ -29,6 +30,7 @@ class MockDataSource {
   final List<GoalSave> _goals;
   final List<GoalTxn> _goalTxns;
   int _goalCounter;
+  int _cardCounter;
 
   /// Domains that should fail, so error states can be verified without a real
   /// backend. Add a key such as `accounts` or `transactions`.
@@ -208,6 +210,45 @@ class MockDataSource {
     }
     return match;
   });
+
+  /// Issues a card and appends it to the deck.
+  ///
+  /// Goes through the plain delay rather than [read], the same way [openGoal]
+  /// does, so a simulated read failure cannot swallow a write the holder just
+  /// confirmed.
+  Future<BankCard> createCard({
+    required String accountId,
+    required String label,
+    required String holderName,
+    required String number,
+    required String cvc,
+    required String expiry,
+    required CardNetwork network,
+    required CardKind kind,
+    required double spendingLimit,
+  }) async {
+    await Future<void>.delayed(_latency());
+    _cardCounter++;
+    final account = _accounts.where((acc) => acc.id == accountId).firstOrNull;
+    final card = BankCard(
+      id: 'card_${_cardCounter.toString().padLeft(3, '0')}',
+      accountId: accountId,
+      label: label,
+      holderName: holderName,
+      number: number,
+      cvc: cvc,
+      expiry: expiry,
+      network: network,
+      kind: kind,
+      status: CardStatus.active,
+      // A card that was just issued has had nothing spent on it.
+      balance: 0,
+      currencyCode: account?.currencyCode ?? 'USD',
+      spendingLimit: spendingLimit,
+    );
+    _cards.add(card);
+    return card;
+  }
 
   Future<BankCard> toggleCardFreeze(String cardId) async {
     return read('cards', () {

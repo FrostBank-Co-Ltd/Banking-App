@@ -379,6 +379,48 @@ class SupabaseCardRepository implements CardRepository {
   }
 
   @override
+  Future<BankCard> createCard({
+    required String accountId,
+    required String label,
+    required String holderName,
+    required String number,
+    required String cvc,
+    required String expiry,
+    required CardNetwork network,
+    required CardKind kind,
+    required double spendingLimit,
+  }) async {
+    try {
+      final user = _client.auth.currentUser;
+      final userId = user?.id ?? MockSeed.customerId;
+      final response = await _client
+          .from('cards')
+          .insert({
+            'account_id': accountId,
+            'label': label,
+            'holder_name': holderName,
+            'number': number,
+            'cvc': cvc,
+            'expiry': expiry,
+            'network': network.name,
+            'kind': kind.name,
+            'status': CardStatus.active.name,
+            // A card that was just issued has had nothing spent on it.
+            'balance': 0,
+            'currency_code': 'USD',
+            'spending_limit': spendingLimit,
+            'user_id': userId,
+          })
+          .select()
+          .single();
+      return SupabaseMappers.cardFromMap(response);
+    } catch (e) {
+      if (e is RepositoryFailure) rethrow;
+      throw RepositoryFailure('Could not add card: $e');
+    }
+  }
+
+  @override
   Future<BankCard> toggleCardFreeze(String cardId) async {
     try {
       final card = await fetchCard(cardId);

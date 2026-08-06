@@ -15,6 +15,7 @@ import '../widgets/motion_effects.dart';
 import '../widgets/pressable.dart';
 import '../widgets/states.dart';
 import '../widgets/surfaces.dart';
+import 'new_card_sheet.dart';
 
 /// Every card on the profile, reached from the brand mark in the centre of the
 /// navigation pill.
@@ -67,7 +68,7 @@ class _CardsScreenState extends ConsumerState<CardsScreen> {
                     message: 'Add your first card to manage it here.',
                     actionLabel: 'Add card',
                     icon: Icons.credit_card_rounded,
-                    onAction: () => context.push('/soon/new-card'),
+                    onAction: () => showNewCardSheet(context),
                   ),
                 ),
                 builder: (rows) => _Deck(
@@ -187,30 +188,31 @@ class _Deck extends ConsumerWidget {
                             ? 'Unfreeze'
                             : 'Freeze',
                         onTap: () async {
-                          try {
-                            final updated = await ref
-                                .read(cardRepositoryProvider)
-                                .toggleCardFreeze(card.id);
-                            ref.invalidate(cardsProvider);
-                            ref.invalidate(cardProvider(card.id));
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    updated.status == CardStatus.frozen
-                                        ? '${card.label} is now frozen.'
-                                        : '${card.label} is now active.',
-                                  ),
-                                ),
-                              );
-                            }
-                          } catch (e) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Failed to update card: $e')),
-                              );
-                            }
-                          }
+                          final controller = ref.read(
+                            cardsControllerProvider.notifier,
+                          );
+                          final ok = await controller.toggleFreeze(card.id);
+                          if (!context.mounted) return;
+
+                          final state = ref.read(cardsControllerProvider);
+                          final message = switch (state) {
+                            CardSuccess(:final card) =>
+                              card.status == CardStatus.frozen
+                                  ? '${card.label} is now frozen.'
+                                  : '${card.label} is now active.',
+                            CardError(:final message) => message,
+                            _ => 'Something went wrong.',
+                          };
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(message),
+                              // The frost takes a beat to settle, so the
+                              // confirmation waits rather than covering it.
+                              duration: ok
+                                  ? const Duration(seconds: 2)
+                                  : const Duration(seconds: 4),
+                            ),
+                          );
                         },
                       ),
                     ),
@@ -232,7 +234,7 @@ class _Deck extends ConsumerWidget {
               FadeSlideIn(
                 index: 6,
                 child: Pressable(
-                  onTap: () => context.push('/soon/new-card'),
+                  onTap: () => showNewCardSheet(context),
                   semanticLabel: 'Add card',
                   borderRadius: AppRadius.lg,
                   child: Container(
