@@ -27,6 +27,10 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
+  assets:
+    # Card scheme artwork. Third party trademarks, bundled for presentation only.
+    - assets/brand/visa.webp
+
   fonts:
     - family: Outfit
       fonts:

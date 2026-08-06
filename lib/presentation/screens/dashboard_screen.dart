@@ -16,6 +16,7 @@ import '../widgets/pressable.dart';
 import '../widgets/states.dart';
 import '../widgets/surfaces.dart';
 import '../widgets/transaction_list.dart';
+import 'new_card_sheet.dart';
 
 // Added imports for basic wealth movement methods:
 //import '../screens/deposit_screen.dart';
@@ -452,7 +453,7 @@ class _CardsCarousel extends ConsumerWidget {
               index: rows.length,
               offset: const Offset(18, 0),
               child: Pressable(
-                onTap: () => context.push('/soon/new-card'),
+                onTap: () => showNewCardSheet(context),
                 semanticLabel: 'Add card',
                 borderRadius: AppRadius.sm,
                 child: AddCardTile(width: thumbWidth, onBrand: true),

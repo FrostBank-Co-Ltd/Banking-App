@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../core/design/motion.dart';
 import '../../core/design/tokens.dart';
@@ -14,6 +13,7 @@ import '../widgets/money_text.dart';
 import '../widgets/motion_effects.dart';
 import '../widgets/states.dart';
 import '../widgets/surfaces.dart';
+import 'new_card_sheet.dart';
 
 /// Card detail. The deck at the top, the balance of whichever card faces the
 /// holder, and that card's details below.
@@ -74,7 +74,7 @@ class _CardDetailScreenState extends ConsumerState<CardDetailScreen> {
             message: 'Add a card to see its details here.',
             actionLabel: 'Add card',
             icon: Icons.credit_card_rounded,
-            onAction: () => context.push('/soon/new-card'),
+            onAction: () => showNewCardSheet(context),
           ),
           builder: (rows) {
             final startIndex = rows.indexWhere(

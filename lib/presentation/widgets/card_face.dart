@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -60,8 +61,21 @@ class CardFace extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: border,
-        child: CustomPaint(
-          painter: _CardFacePainter(sheen: sheen, frozen: frozen),
+        child: TweenAnimationBuilder<double>(
+          tween: Tween<double>(end: frozen ? 1 : 0),
+          duration: Motion.resolve(context, Motion.long),
+          curve: Motion.standard,
+          builder: (context, frost, content) => CustomPaint(
+            painter: _CardFacePainter(
+              sheen: sheen,
+              frost: frost,
+              radius: radius,
+            ),
+            child: content,
+          ),
+          // Handed in rather than rebuilt, so freezing repaints the material
+          // without rebuilding the type, the glyph, and the scheme mark on every
+          // frame.
           child: Stack(
             fit: StackFit.passthrough,
             children: [
@@ -94,7 +108,7 @@ class CardFace extends StatelessWidget {
                               ),
                             ),
                           ),
-                          if (frozen) const _FrozenTag(),
+                          _FrozenTag(frozen: frozen),
                         ],
                       ),
                       Expanded(
@@ -141,36 +155,61 @@ class CardFace extends StatelessWidget {
   }
 }
 
-/// Frozen marker. Only drawn when the card is actually frozen, so the face
-/// stays at four elements in its normal state.
+/// Frozen marker.
+///
+/// Wipes in from the right edge as the card freezes and back out as it thaws,
+/// rather than being added to and removed from the tree, so the state change is
+/// one continuous movement. It takes no width at all when the card is active, so
+/// the face still stays at four elements in its normal state.
+///
+/// Runs on its own timeline from the same [frozen] flag as the frost, with the
+/// same duration and curve, so the two stay together without being wired to each
+/// other.
 class _FrozenTag extends StatelessWidget {
-  const _FrozenTag();
+  const _FrozenTag({required this.frozen});
+
+  final bool frozen;
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: Space.x2, vertical: 3),
-    decoration: BoxDecoration(
-      color: Palette.frostInk.withValues(alpha: 0.16),
-      borderRadius: AppRadius.all(AppRadius.pill),
-      border: Border.all(color: Palette.frostInk.withValues(alpha: 0.28)),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          Icons.ac_unit_rounded,
-          size: 11,
-          color: Palette.frostInk.withValues(alpha: 0.8),
+  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
+    tween: Tween<double>(end: frozen ? 1 : 0),
+    duration: Motion.resolve(context, Motion.long),
+    curve: Motion.standard,
+    builder: (context, t, child) {
+      if (t <= 0) return const SizedBox.shrink();
+      return ClipRect(
+        child: Align(
+          alignment: Alignment.centerRight,
+          widthFactor: t.clamp(0.0, 1.0),
+          child: Opacity(opacity: t.clamp(0.0, 1.0), child: child),
         ),
-        const SizedBox(width: 4),
-        Text(
-          'FROZEN',
-          style: AppType.labelSmall.copyWith(
+      );
+    },
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: Space.x2, vertical: 3),
+      decoration: BoxDecoration(
+        color: Palette.frostInk.withValues(alpha: 0.16),
+        borderRadius: AppRadius.all(AppRadius.pill),
+        border: Border.all(color: Palette.frostInk.withValues(alpha: 0.28)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.ac_unit_rounded,
+            size: 11,
             color: Palette.frostInk.withValues(alpha: 0.8),
-            fontSize: 9,
           ),
-        ),
-      ],
+          const SizedBox(width: 4),
+          Text(
+            'FROZEN',
+            style: AppType.labelSmall.copyWith(
+              color: Palette.frostInk.withValues(alpha: 0.8),
+              fontSize: 9,
+            ),
+          ),
+        ],
+      ),
     ),
   );
 }
@@ -184,16 +223,21 @@ abstract final class _Scheme {
   /// The colour of the region where the two circles meet.
   static const Color mastercardOverlap = Color(0xFFFF5F00);
 
-  static const Color visaBlue = Color(0xFF1A1F71);
+  /// The Visa word mark, bundled as artwork rather than drawn, because the
+  /// letterforms are a custom typeface that no interface font approximates. The
+  /// artwork carries Visa Blue itself, so no colour constant is needed for it.
+  static const String visaAsset = 'assets/brand/visa.webp';
 }
 
-/// Scheme mark on the card face, in scheme colour.
+/// Scheme mark on the card face.
 ///
-/// These are drawn approximations of third party marks, not the licensed
-/// artwork: the geometry and colours follow each scheme's published symbol, and
-/// the Visa word mark is set in the interface font rather than Visa's own.
+/// Both marks belong to their schemes, not to FrostBank, which is why the
+/// colours live here rather than in [Palette]. Visa is the real word mark, drawn
+/// from bundled artwork. Mastercard is drawn from its published geometry: two
+/// circles of equal diameter overlapping, with the intersection in a third
+/// colour.
 ///
-/// Visa sits on a white plate. Visa blue is near black in value, so on the dark
+/// Visa sits on a white plate. Visa Blue is dark, so on the near black lower
 /// half of the card face it would disappear, and a white plate is how the mark
 /// is placed on dark cards in practice. Mastercard needs no plate, because its
 /// two circles already carry their own contrast.
@@ -226,22 +270,21 @@ class NetworkMark extends StatelessWidget {
               color: Colors.white,
               borderRadius: BorderRadius.circular(width * 0.08),
             ),
-            child: Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: width * 0.09),
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    'VISA',
-                    style: AppType.titleSmall.copyWith(
-                      color: _Scheme.visaBlue,
-                      fontWeight: FontWeight.w800,
-                      fontVariations: const [FontVariation('wght', 800)],
-                      letterSpacing: 0.5,
-                      height: 1,
-                    ),
-                  ),
-                ),
+            child: Padding(
+              // Clear space around the word mark. The plate is proportioned to
+              // match the Mastercard symbol beside it, so the mark is centred in
+              // it rather than filling it.
+              padding: EdgeInsets.symmetric(
+                horizontal: width * 0.1,
+                vertical: width * 0.09,
+              ),
+              child: Image.asset(
+                _Scheme.visaAsset,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.medium,
+                // The mark is decorative here: NetworkMark already announces the
+                // scheme through Semantics.
+                excludeFromSemantics: true,
               ),
             ),
           ),
@@ -284,11 +327,60 @@ class _MastercardPainter extends CustomPainter {
   bool shouldRepaint(covariant _MastercardPainter oldDelegate) => false;
 }
 
+/// One frost needle, in coordinates relative to the face.
+///
+/// Fixed rather than random, so a card looks the same every time it freezes and
+/// no seeded generator has to run inside a painter.
+class _Crystal {
+  const _Crystal(this.x, this.y, this.r, this.rotation);
+
+  /// Position as a share of the face, from 0 to 1.
+  final double x;
+  final double y;
+
+  /// Arm length as a share of the face width.
+  final double r;
+
+  final double rotation;
+}
+
+/// Where the frost takes hold. Weighted to the edges and corners, because that
+/// is where a real card ices up first.
+const List<_Crystal> _frostCrystals = [
+  _Crystal(0.08, 0.05, 0.17, 0.2),
+  _Crystal(0.91, 0.08, 0.14, 1.1),
+  _Crystal(0.49, 0.02, 0.11, 0.6),
+  _Crystal(0.04, 0.31, 0.13, 0.9),
+  _Crystal(0.96, 0.38, 0.15, 0.3),
+  _Crystal(0.11, 0.61, 0.14, 1.4),
+  _Crystal(0.89, 0.69, 0.12, 0.75),
+  _Crystal(0.06, 0.94, 0.16, 0.45),
+  _Crystal(0.94, 0.97, 0.13, 1.25),
+  _Crystal(0.41, 0.98, 0.12, 0.15),
+  _Crystal(0.69, 0.88, 0.1, 1.0),
+  _Crystal(0.29, 0.17, 0.09, 0.55),
+  _Crystal(0.75, 0.25, 0.1, 1.35),
+  _Crystal(0.22, 0.81, 0.09, 0.85),
+  _Crystal(0.6, 0.56, 0.08, 0.35),
+  _Crystal(0.35, 0.43, 0.075, 1.15),
+];
+
 class _CardFacePainter extends CustomPainter {
-  const _CardFacePainter({required this.sheen, required this.frozen});
+  const _CardFacePainter({
+    required this.sheen,
+    required this.frost,
+    required this.radius,
+  });
 
   final double sheen;
-  final bool frozen;
+
+  /// How far the freeze has taken hold, from 0 to 1. A continuous value rather
+  /// than a flag, so freezing and thawing are the same code run in opposite
+  /// directions.
+  final double frost;
+
+  /// Corner radius of the face, needed for the rime that hugs the edge.
+  final double radius;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -370,18 +462,129 @@ class _CardFacePainter extends CustomPainter {
         ).createShader(rect),
     );
 
-    if (!frozen) return;
+    if (frost <= 0) return;
+    _paintFrost(canvas, size, rect);
+  }
 
-    // Frozen veil. Cools and flattens the whole face.
+  /// The freeze.
+  ///
+  /// Five layers, each a function of [frost], so the whole thing runs backwards
+  /// on a thaw with no separate code path:
+  ///
+  ///   1. a haze whose clear centre closes as the frost rises, which is what
+  ///      makes the freeze read as spreading inward rather than fading in
+  ///      everywhere at once
+  ///   2. rime thickening along the milled edge
+  ///   3. needles, each waiting its turn, with the wait shorter the nearer it
+  ///      sits to an edge, so growth travels inward behind the haze
+  ///   4. a bright snap that peaks halfway through the change and is gone at
+  ///      both ends, so it fires on freezing and again on thawing but never
+  ///      shows at rest
+  ///   5. the settled veil, which cools and flattens the face
+  void _paintFrost(Canvas canvas, Size size, Rect rect) {
+    const ice = Palette.frostIceWhite;
+    const pale = Palette.frostIcePale;
+
+    final clear = ui.lerpDouble(
+      1.02,
+      0.12,
+      Curves.easeIn.transform(frost),
+    )!.clamp(0.0, 0.995);
     canvas.drawRect(
       rect,
-      Paint()..color = Palette.frostIcePale.withValues(alpha: 0.12),
+      Paint()
+        ..shader = ui.Gradient.radial(
+          rect.center,
+          size.width * 0.74,
+          [pale.withValues(alpha: 0), pale.withValues(alpha: 0.3 * frost)],
+          [clear, 1],
+        ),
     );
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect.deflate(1), Radius.circular(radius)),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2 + 7 * frost
+        ..color = ice.withValues(alpha: 0.32 * frost)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 3 + 5 * frost),
+    );
+
+    // Two passes per needle: a soft bloom underneath so the ice has body, then a
+    // crisp line on top so it still reads as a crystal and not a smudge.
+    final bloom = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = 2.4
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.2);
+    final crisp = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = 1.1;
+
+    for (final crystal in _frostCrystals) {
+      final edge = math.min(
+        math.min(crystal.x, 1 - crystal.x),
+        math.min(crystal.y, 1 - crystal.y),
+      );
+      final delay = (edge / 0.5).clamp(0.0, 1.0) * 0.55;
+      final local = ((frost - delay) / (1 - delay)).clamp(0.0, 1.0);
+      if (local <= 0) continue;
+
+      final grown = Curves.easeOutCubic.transform(local);
+      final centre = Offset(crystal.x * size.width, crystal.y * size.height);
+      final arm = crystal.r * size.width * grown;
+
+      bloom.color = pale.withValues(alpha: 0.46 * grown);
+      crisp.color = ice.withValues(alpha: 0.8 * grown);
+      _needle(canvas, centre, arm, crystal.rotation, bloom);
+      _needle(canvas, centre, arm, crystal.rotation, crisp);
+    }
+
+    final snap = math.sin(math.pi * frost);
+    if (snap > 0.01) {
+      canvas.drawRect(
+        rect,
+        Paint()..color = ice.withValues(alpha: 0.15 * snap),
+      );
+    }
+
+    canvas.drawRect(
+      rect,
+      Paint()..color = pale.withValues(alpha: 0.12 * frost),
+    );
+  }
+
+  /// Six arms from a centre, each forking into two barbs partway out.
+  static void _needle(
+    Canvas canvas,
+    Offset centre,
+    double arm,
+    double rotation,
+    Paint paint,
+  ) {
+    for (var i = 0; i < 6; i++) {
+      final angle = rotation + i * math.pi / 3;
+      final direction = Offset(math.cos(angle), math.sin(angle));
+      canvas.drawLine(centre, centre + direction * arm, paint);
+
+      final fork = centre + direction * (arm * 0.52);
+      for (final side in const [-1.0, 1.0]) {
+        final barb = angle + side * math.pi / 3.2;
+        canvas.drawLine(
+          fork,
+          fork + Offset(math.cos(barb), math.sin(barb)) * (arm * 0.36),
+          paint,
+        );
+      }
+    }
   }
 
   @override
   bool shouldRepaint(covariant _CardFacePainter oldDelegate) =>
-      oldDelegate.sheen != sheen || oldDelegate.frozen != frozen;
+      oldDelegate.sheen != sheen ||
+      oldDelegate.frost != frost ||
+      oldDelegate.radius != radius;
 }
 
 /// Small portrait card used in strips and lists, where the full face would not
@@ -412,10 +615,19 @@ class MiniCardFace extends StatelessWidget {
         ),
         child: ClipRRect(
           borderRadius: border,
-          child: CustomPaint(
-            painter: _CardFacePainter(
-              sheen: 0,
-              frozen: card.status == CardStatus.frozen,
+          child: TweenAnimationBuilder<double>(
+            tween: Tween<double>(
+              end: card.status == CardStatus.frozen ? 1 : 0,
+            ),
+            duration: Motion.resolve(context, Motion.long),
+            curve: Motion.standard,
+            builder: (context, frost, content) => CustomPaint(
+              painter: _CardFacePainter(
+                sheen: 0,
+                frost: frost,
+                radius: AppRadius.sm,
+              ),
+              child: content,
             ),
             child: Padding(
               padding: EdgeInsets.all(width * 0.1),

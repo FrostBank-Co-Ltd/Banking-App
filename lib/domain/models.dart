@@ -106,7 +106,18 @@ class BankCard {
   final String currencyCode;
   final double spendingLimit;
 
-  String get last4 => number.replaceAll(' ', '').substring(number.replaceAll(' ', '').length - 4);
+  /// Last four digits, or the whole thing padded when there are fewer than
+  /// four.
+  ///
+  /// Tolerant on purpose. This build is a user interface presentation and the
+  /// card form takes whatever is typed, so a short or non numeric entry has to
+  /// render rather than throw.
+  String get last4 {
+    final digits = number.replaceAll(RegExp(r'\D'), '');
+    if (digits.isEmpty) return '0000';
+    if (digits.length <= 4) return digits.padLeft(4, '0');
+    return digits.substring(digits.length - 4);
+  }
 
   String get maskedNumber => '\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 $last4';
 
