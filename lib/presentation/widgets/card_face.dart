@@ -65,13 +65,22 @@ class CardFace extends StatelessWidget {
           tween: Tween<double>(end: frozen ? 1 : 0),
           duration: Motion.resolve(context, Motion.long),
           curve: Motion.standard,
-          builder: (context, frost, content) => CustomPaint(
-            painter: _CardFacePainter(
-              sheen: sheen,
-              frost: frost,
-              radius: radius,
+          // The boundary keeps the frost repaint inside the face. Without it,
+          // every frame of the freeze marks the deck and the list above it dirty
+          // as well.
+          builder: (context, frost, content) => RepaintBoundary(
+            child: CustomPaint(
+              painter: _CardFacePainter(
+                sheen: sheen,
+                frost: frost,
+                radius: radius,
+              ),
+              // Signals that the painter is mid animation while the frost is
+              // between its two rest states, so the raster cache does not try to
+              // hold on to a frame that is about to change.
+              willChange: frost > 0 && frost < 1,
+              child: content,
             ),
-            child: content,
           ),
           // Handed in rather than rebuilt, so freezing repaints the material
           // without rebuilding the type, the glyph, and the scheme mark on every
@@ -332,7 +341,7 @@ class _MastercardPainter extends CustomPainter {
 /// Fixed rather than random, so a card looks the same every time it freezes and
 /// no seeded generator has to run inside a painter.
 class _Crystal {
-  const _Crystal(this.x, this.y, this.r, this.rotation);
+  const _Crystal(this.x, this.y, this.r, this.rotation, this.delay);
 
   /// Position as a share of the face, from 0 to 1.
   final double x;
@@ -342,27 +351,31 @@ class _Crystal {
   final double r;
 
   final double rotation;
+
+  /// Share of the freeze that passes before this one starts to grow. Set by hand
+  /// rather than derived from the position: the needles all sit near an edge now,
+  /// so geometry alone would start them together and there would be no creep.
+  final double delay;
 }
 
-/// Where the frost takes hold. Weighted to the edges and corners, because that
-/// is where a real card ices up first.
+/// Where the frost takes hold.
+///
+/// All of them hug an edge or a corner, which is where a real card ices up first
+/// and, just as usefully, leaves the middle of the face clear so the mark and the
+/// scheme artwork still read through the frost. An earlier pass put sixteen large
+/// needles across the whole face, including over the mark, and a frozen card
+/// stopped looking like a FrostBank card at all.
 const List<_Crystal> _frostCrystals = [
-  _Crystal(0.08, 0.05, 0.17, 0.2),
-  _Crystal(0.91, 0.08, 0.14, 1.1),
-  _Crystal(0.49, 0.02, 0.11, 0.6),
-  _Crystal(0.04, 0.31, 0.13, 0.9),
-  _Crystal(0.96, 0.38, 0.15, 0.3),
-  _Crystal(0.11, 0.61, 0.14, 1.4),
-  _Crystal(0.89, 0.69, 0.12, 0.75),
-  _Crystal(0.06, 0.94, 0.16, 0.45),
-  _Crystal(0.94, 0.97, 0.13, 1.25),
-  _Crystal(0.41, 0.98, 0.12, 0.15),
-  _Crystal(0.69, 0.88, 0.1, 1.0),
-  _Crystal(0.29, 0.17, 0.09, 0.55),
-  _Crystal(0.75, 0.25, 0.1, 1.35),
-  _Crystal(0.22, 0.81, 0.09, 0.85),
-  _Crystal(0.6, 0.56, 0.08, 0.35),
-  _Crystal(0.35, 0.43, 0.075, 1.15),
+  _Crystal(0.07, 0.05, 0.1, 0.2, 0),
+  _Crystal(0.92, 0.96, 0.085, 1.25, 0.06),
+  _Crystal(0.91, 0.07, 0.085, 1.1, 0.14),
+  _Crystal(0.06, 0.95, 0.095, 0.45, 0.2),
+  _Crystal(0.04, 0.3, 0.075, 0.9, 0.3),
+  _Crystal(0.96, 0.38, 0.08, 0.3, 0.36),
+  _Crystal(0.46, 0.02, 0.07, 0.6, 0.42),
+  _Crystal(0.93, 0.7, 0.07, 0.75, 0.46),
+  _Crystal(0.06, 0.64, 0.075, 1.4, 0.5),
+  _Crystal(0.42, 0.98, 0.065, 0.15, 0.55),
 ];
 
 class _CardFacePainter extends CustomPainter {
@@ -370,6 +383,7 @@ class _CardFacePainter extends CustomPainter {
     required this.sheen,
     required this.frost,
     required this.radius,
+    this.needles = true,
   });
 
   final double sheen;
@@ -381,6 +395,10 @@ class _CardFacePainter extends CustomPainter {
 
   /// Corner radius of the face, needed for the rime that hugs the edge.
   final double radius;
+
+  /// Whether to grow crystals. Off for the small face, where they would be a
+  /// scribble at that size and are not worth the path.
+  final bool needles;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -481,67 +499,107 @@ class _CardFacePainter extends CustomPainter {
   ///      both ends, so it fires on freezing and again on thawing but never
   ///      shows at rest
   ///   5. the settled veil, which cools and flattens the face
+  ///
+  /// Every layer is a plain shader fill or a stroke. There is deliberately no
+  /// [MaskFilter] anywhere: an earlier version blurred each needle and drew each
+  /// one separately, which came to 576 draw calls per frame with 288 of them
+  /// blurred, and that alone was enough to drop frames and take the rasteriser
+  /// down. The needles now accumulate into one [Path] stroked twice, so the whole
+  /// freeze costs five draw calls.
   void _paintFrost(Canvas canvas, Size size, Rect rect) {
     const ice = Palette.frostIceWhite;
     const pale = Palette.frostIcePale;
 
+    // Clamped before it reaches a curve. Curve.transform asserts on anything
+    // outside the unit range, and a tween that overshoots by a float's width
+    // would otherwise take the whole frame down.
+    final t = frost.clamp(0.0, 1.0);
+
+    // Stops short of the middle even at full frost, so the mark and the scheme
+    // artwork keep their contrast under the ice.
     final clear = ui.lerpDouble(
       1.02,
-      0.12,
-      Curves.easeIn.transform(frost),
+      0.3,
+      Curves.easeIn.transform(t),
     )!.clamp(0.0, 0.995);
     canvas.drawRect(
       rect,
       Paint()
         ..shader = ui.Gradient.radial(
           rect.center,
-          size.width * 0.74,
-          [pale.withValues(alpha: 0), pale.withValues(alpha: 0.3 * frost)],
+          size.width * 0.78,
+          [pale.withValues(alpha: 0), pale.withValues(alpha: 0.26 * t)],
           [clear, 1],
         ),
     );
 
+    // Rime along the milled edge, graded outward rather than blurred.
+    final thickness = 2 + 6 * t;
     canvas.drawRRect(
-      RRect.fromRectAndRadius(rect.deflate(1), Radius.circular(radius)),
+      RRect.fromRectAndRadius(
+        rect.deflate(thickness / 2),
+        Radius.circular(radius),
+      ),
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 2 + 7 * frost
-        ..color = ice.withValues(alpha: 0.32 * frost)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 3 + 5 * frost),
+        ..strokeWidth = thickness
+        ..shader = ui.Gradient.radial(
+          rect.center,
+          size.width * 0.72,
+          [ice.withValues(alpha: 0), ice.withValues(alpha: 0.34 * t)],
+          const [0.5, 1],
+        ),
     );
 
-    // Two passes per needle: a soft bloom underneath so the ice has body, then a
-    // crisp line on top so it still reads as a crystal and not a smudge.
-    final bloom = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = 2.4
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.2);
-    final crisp = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = 1.1;
+    if (needles) {
+      final path = Path();
+      var any = false;
 
-    for (final crystal in _frostCrystals) {
-      final edge = math.min(
-        math.min(crystal.x, 1 - crystal.x),
-        math.min(crystal.y, 1 - crystal.y),
-      );
-      final delay = (edge / 0.5).clamp(0.0, 1.0) * 0.55;
-      final local = ((frost - delay) / (1 - delay)).clamp(0.0, 1.0);
-      if (local <= 0) continue;
+      for (final crystal in _frostCrystals) {
+        final local = ((t - crystal.delay) / (1 - crystal.delay)).clamp(
+          0.0,
+          1.0,
+        );
+        if (local <= 0) continue;
 
-      final grown = Curves.easeOutCubic.transform(local);
-      final centre = Offset(crystal.x * size.width, crystal.y * size.height);
-      final arm = crystal.r * size.width * grown;
+        final arm =
+            crystal.r * size.width * Curves.easeOutCubic.transform(local);
+        // Below a pixel there is nothing to see, and a round cap would leave a
+        // dot where no crystal has grown yet.
+        if (arm < 1) continue;
 
-      bloom.color = pale.withValues(alpha: 0.46 * grown);
-      crisp.color = ice.withValues(alpha: 0.8 * grown);
-      _needle(canvas, centre, arm, crystal.rotation, bloom);
-      _needle(canvas, centre, arm, crystal.rotation, crisp);
+        _needle(
+          path,
+          Offset(crystal.x * size.width, crystal.y * size.height),
+          arm,
+          crystal.rotation,
+        );
+        any = true;
+      }
+
+      if (any) {
+        // Two strokes over the same path: a wide soft one for body, a narrow
+        // bright one for the crystal itself.
+        canvas.drawPath(
+          path,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeCap = StrokeCap.round
+            ..strokeWidth = 2.8
+            ..color = pale.withValues(alpha: 0.3 * t),
+        );
+        canvas.drawPath(
+          path,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeCap = StrokeCap.round
+            ..strokeWidth = 1
+            ..color = ice.withValues(alpha: 0.78 * t),
+        );
+      }
     }
 
-    final snap = math.sin(math.pi * frost);
+    final snap = math.sin(math.pi * t);
     if (snap > 0.01) {
       canvas.drawRect(
         rect,
@@ -549,33 +607,37 @@ class _CardFacePainter extends CustomPainter {
       );
     }
 
-    canvas.drawRect(
-      rect,
-      Paint()..color = pale.withValues(alpha: 0.12 * frost),
-    );
+    canvas.drawRect(rect, Paint()..color = pale.withValues(alpha: 0.09 * t));
   }
 
-  /// Six arms from a centre, each forking into two barbs partway out.
+  /// Adds one needle to [path]: six arms from a centre, each forking into two
+  /// barbs partway out.
+  ///
+  /// Appends rather than draws, so every needle on the face ends up in a single
+  /// path and costs one rasterisation between them.
   static void _needle(
-    Canvas canvas,
+    Path path,
     Offset centre,
     double arm,
     double rotation,
-    Paint paint,
   ) {
     for (var i = 0; i < 6; i++) {
       final angle = rotation + i * math.pi / 3;
       final direction = Offset(math.cos(angle), math.sin(angle));
-      canvas.drawLine(centre, centre + direction * arm, paint);
+
+      path
+        ..moveTo(centre.dx, centre.dy)
+        ..relativeLineTo(direction.dx * arm, direction.dy * arm);
 
       final fork = centre + direction * (arm * 0.52);
       for (final side in const [-1.0, 1.0]) {
         final barb = angle + side * math.pi / 3.2;
-        canvas.drawLine(
-          fork,
-          fork + Offset(math.cos(barb), math.sin(barb)) * (arm * 0.36),
-          paint,
-        );
+        path
+          ..moveTo(fork.dx, fork.dy)
+          ..relativeLineTo(
+            math.cos(barb) * arm * 0.36,
+            math.sin(barb) * arm * 0.36,
+          );
       }
     }
   }
@@ -584,7 +646,8 @@ class _CardFacePainter extends CustomPainter {
   bool shouldRepaint(covariant _CardFacePainter oldDelegate) =>
       oldDelegate.sheen != sheen ||
       oldDelegate.frost != frost ||
-      oldDelegate.radius != radius;
+      oldDelegate.radius != radius ||
+      oldDelegate.needles != needles;
 }
 
 /// Small portrait card used in strips and lists, where the full face would not
@@ -615,19 +678,15 @@ class MiniCardFace extends StatelessWidget {
         ),
         child: ClipRRect(
           borderRadius: border,
-          child: TweenAnimationBuilder<double>(
-            tween: Tween<double>(
-              end: card.status == CardStatus.frozen ? 1 : 0,
-            ),
-            duration: Motion.resolve(context, Motion.long),
-            curve: Motion.standard,
-            builder: (context, frost, content) => CustomPaint(
-              painter: _CardFacePainter(
-                sheen: 0,
-                frost: frost,
-                radius: AppRadius.sm,
-              ),
-              child: content,
+          // Not animated, and no crystals. A strip of these can be on screen at
+          // once, and the freeze is already told on the full face; paying for it
+          // again on a 96 pixel thumbnail is not worth the frames.
+          child: CustomPaint(
+            painter: _CardFacePainter(
+              sheen: 0,
+              frost: card.status == CardStatus.frozen ? 1 : 0,
+              radius: AppRadius.sm,
+              needles: false,
             ),
             child: Padding(
               padding: EdgeInsets.all(width * 0.1),

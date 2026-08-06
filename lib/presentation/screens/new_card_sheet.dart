@@ -393,6 +393,11 @@ class _Choices<T> extends StatelessWidget {
   }
 }
 
+/// One selectable chip.
+///
+/// Requires a bounded width from its parent, because the label is flexible so it
+/// can ellipsize. Callers place it inside an [Expanded] or a [SizedBox]; dropping
+/// it straight into a horizontally scrolling row will fail to lay out.
 class _Chip extends StatelessWidget {
   const _Chip({
     required this.label,
@@ -521,8 +526,11 @@ class _AccountPicker extends StatelessWidget {
                 for (final account in accounts)
                   Padding(
                     padding: const EdgeInsets.only(right: Space.x3),
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(minWidth: 132),
+                    // A fixed width, not a minimum. This row scrolls
+                    // horizontally, so it hands its children an unbounded width,
+                    // and the flex inside _Chip cannot lay out against that.
+                    child: SizedBox(
+                      width: 168,
                       child: _Chip(
                         label: account.name,
                         sublabel: account.shortCode,
