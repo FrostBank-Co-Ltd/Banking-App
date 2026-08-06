@@ -34,6 +34,7 @@ import 'shell/branch_transition.dart';
 import 'screens/deposit_screen.dart';
 import 'screens/transfer_screen.dart';
 import 'screens/qr_screen.dart';
+import 'screens/netkeiba_race_screen.dart';
 
 final _rootKey = GlobalKey<NavigatorState>(debugLabel: 'root');
 
@@ -152,6 +153,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/qr-scanner',
         builder: (_, state) => const QRScreen(),
+      ),
+      GoRoute(
+        path: '/netkeiba',
+        builder: (_, _) => const NetkeibaRaceScreen(),
       ),
       // The plain indexedStack constructor is not used, because it hard codes an
       // IndexedStack that swaps branches on a single frame. BranchTransition is

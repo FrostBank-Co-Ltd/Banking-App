@@ -11,6 +11,7 @@ import '../widgets/card_carousel.dart';
 import '../widgets/card_face.dart';
 import '../widgets/money_text.dart';
 import '../widgets/motion_effects.dart';
+import '../widgets/pressable.dart';
 import '../widgets/states.dart';
 import '../widgets/surfaces.dart';
 import 'new_card_sheet.dart';
@@ -199,6 +200,64 @@ class _CardDetailScreenState extends ConsumerState<CardDetailScreen> {
                               color: card.status == CardStatus.frozen
                                   ? context.tokens.info
                                   : context.tokens.success,
+                            ),
+                          ),
+                          trailing: Pressable(
+                            onTap: () async {
+                              final controller = ref.read(
+                                cardsControllerProvider.notifier,
+                              );
+                              await controller.toggleFreeze(card.id);
+                              if (!context.mounted) return;
+
+                              final state = ref.read(cardsControllerProvider);
+                              final message = switch (state) {
+                                CardSuccess(:final card) =>
+                                  card.status == CardStatus.frozen
+                                      ? '${card.label} is now frozen.'
+                                      : '${card.label} is now active.',
+                                CardError(:final message) => message,
+                                _ => 'Something went wrong.',
+                              };
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(message),
+                                  duration: const Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: Space.x3,
+                                vertical: Space.x1 + 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: context.tokens.interactiveSecondary,
+                                borderRadius: AppRadius.all(AppRadius.pill),
+                                border: Border.all(color: context.tokens.border),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    card.status == CardStatus.frozen
+                                        ? Icons.lock_open_rounded
+                                        : Icons.ac_unit_rounded,
+                                    size: 14,
+                                    color: context.tokens.accent,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    card.status == CardStatus.frozen
+                                        ? 'Unfreeze'
+                                        : 'Freeze',
+                                    style: AppType.labelSmall.copyWith(
+                                      color: context.tokens.accent,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
