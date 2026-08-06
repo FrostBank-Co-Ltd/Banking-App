@@ -21,10 +21,7 @@ abstract interface class AccountRepository {
   Future<Account> fetchAccount(String id);
 
   /// Deposit funds into an account.
-  Future<Account> deposit({
-    required String accountId,
-    required double amount,
-  });
+  Future<Account> deposit({required String accountId, required double amount});
 
   /// Transfer funds to a recipient or account.
   Future<Account> transfer({
@@ -36,6 +33,13 @@ abstract interface class AccountRepository {
 }
 
 abstract interface class CardRepository {
+  /// Every card on the profile, in a stable order.
+  ///
+  /// Stable is the part that matters, and it is a contract rather than a
+  /// convenience. The deck addresses cards by position, so if a write can send
+  /// the same set of cards back in a different order, freezing the card in front
+  /// moves it somewhere else in the deck and puts a different card under the
+  /// holder's thumb.
   Future<List<BankCard>> fetchCards();
 
   Future<BankCard> fetchCard(String id);

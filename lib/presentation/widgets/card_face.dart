@@ -20,6 +20,7 @@ class CardFace extends StatelessWidget {
     required this.card,
     this.sheen = 0,
     this.lift = 1,
+    this.pending = false,
     this.radius = AppRadius.lg,
     super.key,
   });
@@ -40,157 +41,387 @@ class CardFace extends StatelessWidget {
   /// lower, so the active card reads as the one in hand.
   final double lift;
 
+  /// True while a freeze or a thaw has been asked for and the write has not come
+  /// back. The face takes the frost to [_FrostDriveState._nucleation] so the tap
+  /// is answered on the frame the finger lifts, and deliberately stops short of
+  /// the point where [_FrozenTag] appears: the material can show that something
+  /// is happening, but the card is not frozen until the bank says it is.
+  final bool pending;
+
   final double radius;
 
   @override
   Widget build(BuildContext context) {
     final border = BorderRadius.circular(radius);
-    final frozen = card.status == CardStatus.frozen;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: border,
-        boxShadow: [
-          BoxShadow(
-            color: Palette.frostInk.withValues(alpha: 0.34 * lift),
-            blurRadius: 34 * lift,
-            spreadRadius: -4,
-            offset: Offset(0, 18 * lift),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: border,
-        child: TweenAnimationBuilder<double>(
-          tween: Tween<double>(end: frozen ? 1 : 0),
-          duration: Motion.resolve(context, Motion.long),
-          curve: Motion.standard,
-          // The boundary keeps the frost repaint inside the face. Without it,
-          // every frame of the freeze marks the deck and the list above it dirty
-          // as well.
-          builder: (context, frost, content) => RepaintBoundary(
-            child: CustomPaint(
-              painter: _CardFacePainter(
-                sheen: sheen,
-                frost: frost,
-                radius: radius,
-              ),
-              // Signals that the painter is mid animation while the frost is
-              // between its two rest states, so the raster cache does not try to
-              // hold on to a frame that is about to change.
-              willChange: frost > 0 && frost < 1,
-              child: content,
-            ),
-          ),
-          // Handed in rather than rebuilt, so freezing repaints the material
-          // without rebuilding the type, the glyph, and the scheme mark on every
-          // frame.
-          child: Stack(
-            fit: StackFit.passthrough,
-            children: [
-              // Inner hairline. Reads as the milled edge of the card.
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: border,
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.14),
-                    ),
-                  ),
-                ),
-              ),
-              LayoutBuilder(
-                builder: (context, constraints) => Padding(
-                  padding: EdgeInsets.all(constraints.maxWidth * 0.075),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              '\u2022\u2022\u2022\u2022 ${card.last4}',
-                              style: AppType.numericSmall.copyWith(
-                                color: Palette.frostInk.withValues(alpha: 0.72),
-                                letterSpacing: 1.4,
-                              ),
-                            ),
-                          ),
-                          _FrozenTag(frozen: frozen),
-                        ],
-                      ),
-                      Expanded(
-                        child: Center(
-                          child: FrostGlyph(
-                            width: constraints.maxWidth * 0.56,
-                            excludeSemantics: true,
-                          ),
-                        ),
-                      ),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          // Align, not a bare Expanded child: Expanded hands
-                          // down a tight width, which would stretch the mark
-                          // and pull the two Mastercard circles apart.
-                          Expanded(
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: NetworkMark(
-                                network: card.network,
-                                width: constraints.maxWidth * 0.21,
-                              ),
-                            ),
-                          ),
-                          Text(
-                            card.kind.label,
-                            style: AppType.titleSmall.copyWith(
-                              color: Colors.white,
-                              letterSpacing: 0.2,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
+    return _FrostDrive(
+      frozen: card.status == CardStatus.frozen,
+      pending: pending,
+      builder: (context, frost) {
+        final face = DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: border,
+            boxShadow: [
+              BoxShadow(
+                color: Palette.frostInk.withValues(alpha: 0.34 * lift),
+                blurRadius: 34 * lift,
+                spreadRadius: -4,
+                offset: Offset(0, 18 * lift),
               ),
             ],
           ),
-        ),
-      ),
+          child: ClipRRect(
+            borderRadius: border,
+            child: _FrostedFace(
+              frost: frost,
+              sheen: sheen,
+              radius: radius,
+              colourway: colourwayFor(card.id),
+              // Handed in rather than rebuilt, so freezing repaints the material
+              // without rebuilding the type, the glyph, and the scheme mark on
+              // every frame. The marker inside listens to the same drive and
+              // rebuilds only itself.
+              child: Stack(
+                fit: StackFit.passthrough,
+                children: [
+                  // Inner hairline. Reads as the milled edge of the card.
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: border,
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.14),
+                        ),
+                      ),
+                    ),
+                  ),
+                  LayoutBuilder(
+                    builder: (context, constraints) => Padding(
+                      padding: EdgeInsets.all(constraints.maxWidth * 0.075),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  '\u2022\u2022\u2022\u2022 ${card.last4}',
+                                  style: AppType.numericSmall.copyWith(
+                                    color: Palette.frostInk.withValues(
+                                      alpha: 0.72,
+                                    ),
+                                    letterSpacing: 1.4,
+                                  ),
+                                ),
+                              ),
+                              _FrozenTag(frost: frost),
+                            ],
+                          ),
+                          Expanded(
+                            child: Center(
+                              child: FrostGlyph(
+                                width: constraints.maxWidth * 0.56,
+                                excludeSemantics: true,
+                              ),
+                            ),
+                          ),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              // Align, not a bare Expanded child: Expanded hands
+                              // down a tight width, which would stretch the mark
+                              // and pull the two Mastercard circles apart.
+                              Expanded(
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: NetworkMark(
+                                    network: card.network,
+                                    width: constraints.maxWidth * 0.21,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                card.kind.label,
+                                style: AppType.titleSmall.copyWith(
+                                  color: Colors.white,
+                                  letterSpacing: 0.2,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+
+        // Applied outside the clip and the shadow, so the object squeezes as a
+        // whole rather than the content pulling away from its own corners.
+        if (Motion.isReduced(context)) return face;
+        return _Recoil(frost: frost, child: face);
+      },
     );
   }
 }
 
-/// Frozen marker.
+/// The freeze timeline.
 ///
-/// Wipes in from the right edge as the card freezes and back out as it thaws,
-/// rather than being added to and removed from the tree, so the state change is
-/// one continuous movement. It takes no width at all when the card is active, so
-/// the face still stays at four elements in its normal state.
+/// One controller for the whole state change: the material, the marker, and the
+/// squeeze all read from it, so nothing has to be kept in step with anything
+/// else and the face costs one ticker rather than one per moving part.
 ///
-/// Runs on its own timeline from the same [frozen] flag as the frost, with the
-/// same duration and curve, so the two stay together without being wired to each
-/// other.
-class _FrozenTag extends StatelessWidget {
-  const _FrozenTag({required this.frozen});
+/// Freezing and thawing are not the same run played backwards, which is the
+/// whole point of driving it by hand instead of with a [TweenAnimationBuilder].
+/// Ice takes hold over a longer run than it gives up, the bright pass lands at a
+/// different moment in each direction, and the needles grow but do not retract.
+class _FrostDrive extends StatefulWidget {
+  const _FrostDrive({
+    required this.frozen,
+    required this.pending,
+    required this.builder,
+  });
 
   final bool frozen;
+  final bool pending;
+
+  /// Handed the drive rather than a value, so each moving part can listen for
+  /// itself and rebuild only its own subtree.
+  final Widget Function(BuildContext context, Animation<double> frost) builder;
 
   @override
-  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
-    tween: Tween<double>(end: frozen ? 1 : 0),
-    duration: Motion.resolve(context, Motion.long),
-    curve: Motion.standard,
-    builder: (context, t, child) {
-      if (t <= 0) return const SizedBox.shrink();
-      return ClipRect(
-        child: Align(
-          alignment: Alignment.centerRight,
-          widthFactor: t.clamp(0.0, 1.0),
-          child: Opacity(opacity: t.clamp(0.0, 1.0), child: child),
+  State<_FrostDrive> createState() => _FrostDriveState();
+}
+
+class _FrostDriveState extends State<_FrostDrive>
+    with SingleTickerProviderStateMixin {
+  /// The freeze. Longer than the thaw, and longer than a plain transition,
+  /// because the face has to be seen taking the frost rather than arriving with
+  /// it. Summed from bands in [Motion] rather than being a new number, so the
+  /// feature stays inside the motion system.
+  static final Duration _freezeRun = Motion.long + Motion.short;
+
+  /// The thaw. Ice lets go faster than it forms.
+  static final Duration _thawRun = Motion.medium + Motion.instant;
+
+  /// The bite. Front loaded, so the edge is already cold on the frame the finger
+  /// lifts and the rest of the run is the front creeping inward.
+  static const Curve _bite = Motion.emphasized;
+
+  /// The release. Read against a value falling from one, this drops the bulk of
+  /// the ice at once and leaves the last film to clear slowly, which is the
+  /// shape of a thaw rather than a freeze in reverse.
+  static const Curve _release = Motion.standard;
+
+  /// How far the frost goes while the write is in flight. Enough to read as
+  /// taking hold at the edge, and under [_FrozenTag._start], so a pending card
+  /// never claims to be frozen.
+  static const double _nucleation = 0.16;
+
+  late final AnimationController _frost;
+
+  @override
+  void initState() {
+    super.initState();
+    _frost = AnimationController(
+      vsync: this,
+      duration: _freezeRun,
+      reverseDuration: _thawRun,
+      value: widget.frozen ? 1 : 0,
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Also covers the platform turning animation off mid run.
+    _run();
+  }
+
+  @override
+  void didUpdateWidget(_FrostDrive oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.frozen != widget.frozen ||
+        oldWidget.pending != widget.pending) {
+      _run();
+    }
+  }
+
+  @override
+  void dispose() {
+    _frost.dispose();
+    super.dispose();
+  }
+
+  /// Where the frost belongs for the current inputs.
+  double get _target {
+    if (!widget.pending) return widget.frozen ? 1 : 0;
+    return widget.frozen ? 1 - _nucleation : _nucleation;
+  }
+
+  void _run() {
+    final target = _target;
+    if (Motion.isReduced(context)) {
+      _frost.value = target;
+      return;
+    }
+    // Retargeting mid run is the normal case, not an edge case: the write
+    // resolves while the nucleation is still settling. Both calls interpolate
+    // from wherever the value currently sits and scale the run to the distance
+    // left, so the frost never jumps and never restarts.
+    if (target > _frost.value) {
+      _frost.animateTo(target, curve: _bite);
+    } else if (target < _frost.value) {
+      _frost.animateBack(target, curve: _release);
+    } else if (_frost.isAnimating) {
+      // Asked for exactly where it already sits while a run is in flight, so the
+      // run is heading somewhere no longer wanted.
+      _frost.stop();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(context, _frost);
+}
+
+/// The card material, repainted as the frost moves.
+///
+/// The [RepaintBoundary] keeps the freeze inside the face. Without it, every
+/// frame marks the deck and the screen above it dirty as well.
+class _FrostedFace extends StatelessWidget {
+  const _FrostedFace({
+    required this.frost,
+    required this.sheen,
+    required this.radius,
+    required this.colourway,
+    required this.child,
+  });
+
+  final Animation<double> frost;
+  final double sheen;
+  final double radius;
+  final CardColourway colourway;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: frost,
+    child: child,
+    builder: (context, content) {
+      final t = frost.value;
+      return RepaintBoundary(
+        child: CustomPaint(
+          painter: _CardFacePainter(
+            sheen: sheen,
+            frost: t,
+            thawing: frost.status == AnimationStatus.reverse,
+            radius: radius,
+            colourway: colourway,
+          ),
+          // Signals that the painter is mid animation while the frost is
+          // between its two rest states, so the raster cache does not try to
+          // hold on to a frame that is about to change.
+          willChange: t > 0 && t < 1,
+          child: content,
+        ),
+      );
+    },
+  );
+}
+
+/// The card's own answer to the change.
+///
+/// Feedback: the face tightens as the ice locks and eases open as it lets go, so
+/// the object responds rather than only its surface. Scale alone, on the same
+/// pulse as the bright pass in the painter, so the two read as one event. Not
+/// built at all under reduced motion.
+class _Recoil extends StatelessWidget {
+  const _Recoil({required this.frost, required this.child});
+
+  final Animation<double> frost;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: frost,
+    child: child,
+    builder: (context, face) {
+      final thawing = frost.status == AnimationStatus.reverse;
+      final event = _lockEvent(frost.value, thawing);
+      // Below this the squeeze is under a tenth of a pixel on a card this size,
+      // so the transform is not worth a layer.
+      if (event < 0.03) return face!;
+      return Transform.scale(
+        scale: thawing ? 1 + 0.008 * event : 1 - 0.013 * event,
+        child: face,
+      );
+    },
+  );
+}
+
+/// The moment the state actually turns over, as a pulse from 0 to 1.
+///
+/// Zero at both rest states, so it fires once per change and never sits on a
+/// settled card. On a freeze it peaks near full ice, where the face locks. On a
+/// thaw it peaks near clear, where the last film breaks and the card comes back.
+/// That difference in timing is most of what stops the two directions from
+/// reading as one animation played both ways.
+///
+/// Both shapes are also near zero where a pending face parks, which is why
+/// waiting on the bank does not leave a card sitting lit.
+double _lockEvent(double frost, bool thawing) {
+  final t = frost.clamp(0.0, 1.0);
+  // Normalised so each has a maximum of exactly 1: the remainder squared peaks
+  // at one third, t cubed times the remainder at three quarters.
+  return thawing ? t * (1 - t) * (1 - t) * 6.75 : t * t * t * (1 - t) * 9.481;
+}
+
+/// Frozen marker.
+///
+/// Arrives on the same drive as the frost, over a window inside it: it waits for
+/// the rime to bite and is settled before the ice locks, so the marker reads as a
+/// consequence of the freeze rather than a second thing happening alongside it.
+/// Run the other way, that window makes the tag the first thing to leave on a
+/// thaw, which is the right order for a card being handed back.
+///
+/// It takes no width at all when the card is active, so the face still stays at
+/// four elements in its normal state, and once it is in the tree its box is a
+/// fixed size for the rest of the run: the arrival is a transform and an opacity,
+/// never a width. The earlier version animated an [Align] width factor, which
+/// relaid out the row and remeasured the digits beside it on every single frame.
+class _FrozenTag extends StatelessWidget {
+  const _FrozenTag({required this.frost});
+
+  final Animation<double> frost;
+
+  /// Where in the freeze the tag lands. The start also sets the ceiling on
+  /// [_FrostDriveState._nucleation]: below it, a card whose write is still in
+  /// flight shows frost but never the word.
+  static const double _start = 0.2;
+  static const double _end = 0.7;
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: frost,
+    builder: (context, child) {
+      final raw = ((frost.value - _start) / (_end - _start)).clamp(0.0, 1.0);
+      if (raw <= 0) return const SizedBox.shrink();
+      final t = Motion.standard.transform(raw);
+      return Opacity(
+        opacity: t,
+        child: Transform.translate(
+          offset: Offset(10 * (1 - t), 0),
+          child: Transform.scale(
+            scale: 0.9 + 0.1 * t,
+            // Pinned to the right, so the tag grows out of the edge it sits
+            // against instead of drifting toward the digits.
+            alignment: Alignment.centerRight,
+            child: child,
+          ),
         ),
       );
     },
@@ -314,10 +545,7 @@ class _MastercardPainter extends CustomPainter {
     // proportion sets how far the two circles overlap.
     final r = size.height / 2;
     final left = Rect.fromCircle(center: Offset(r, r), radius: r);
-    final right = Rect.fromCircle(
-      center: Offset(size.width - r, r),
-      radius: r,
-    );
+    final right = Rect.fromCircle(center: Offset(size.width - r, r), radius: r);
 
     canvas
       ..drawOval(left, Paint()..color = _Scheme.mastercardRed)
@@ -334,6 +562,68 @@ class _MastercardPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _MastercardPainter oldDelegate) => false;
+}
+
+/// A card product's colourway.
+///
+/// Every card in the portfolio shares one structure: ice at the top, ink under
+/// the mark, the same stops from [Palette.cardFaceStops], the same corner bloom,
+/// the same specular travel. Only the hue of the band and the light entering from
+/// the right change, which is enough to tell one card from another in a strip
+/// while keeping them unmistakably one family.
+class CardColourway {
+  const CardColourway({
+    required this.fall,
+    required this.light,
+    required this.lightFade,
+  });
+
+  /// Top to bottom fall of the face, read against [Palette.cardFaceStops].
+  final List<Color> fall;
+
+  /// Cool light entering from the right, held inside the colour band, and the
+  /// tone it falls away through.
+  final Color light;
+  final Color lightFade;
+}
+
+/// The portfolio.
+///
+/// Three products, so a wallet reads as a wallet rather than as one card printed
+/// several times. All three stay cold and stay inside the brand sheet.
+const List<CardColourway> _colourways = [
+  // Glacier. The signature card, and the one the brand mark was drawn against.
+  CardColourway(
+    fall: Palette.gradientCardFace,
+    light: Palette.cardAzure,
+    lightFade: Palette.cardOcean,
+  ),
+  // Aurora.
+  CardColourway(
+    fall: Palette.gradientCardAurora,
+    light: Palette.frostViolet,
+    lightFade: Palette.frostPurple,
+  ),
+  // Meridian.
+  CardColourway(
+    fall: Palette.gradientCardMeridian,
+    light: Palette.frostIceBlue,
+    lightFade: Palette.primaryBlue,
+  ),
+];
+
+/// Which product a card is.
+///
+/// Taken from the card's own id, so a card keeps its face wherever it sits in the
+/// deck and however the list is ordered. Mixed by hand rather than through
+/// [String.hashCode], which Dart does not promise to keep the same between runs:
+/// a card that changed colour on a restart would be a bug the holder could see.
+CardColourway colourwayFor(String cardId) {
+  var hash = 0;
+  for (final unit in cardId.codeUnits) {
+    hash = (hash * 31 + unit) & 0xffffff;
+  }
+  return _colourways[hash % _colourways.length];
 }
 
 /// One frost needle, in coordinates relative to the face.
@@ -365,17 +655,31 @@ class _Crystal {
 /// scheme artwork still read through the frost. An earlier pass put sixteen large
 /// needles across the whole face, including over the mark, and a frozen card
 /// stopped looking like a FrostBank card at all.
+/// Two sizes rather than one. An earlier pass used ten needles all of much the
+/// same size, and at rest they read as a handful of snowflakes stuck on the card
+/// rather than as frost: evenly sized shapes with clear space between them are
+/// what makes a pattern look applied. The small ones fill the gaps and break that
+/// up, and because every needle lands in the same [Path] the extra ones cost
+/// nothing beyond their own line work.
 const List<_Crystal> _frostCrystals = [
-  _Crystal(0.07, 0.05, 0.1, 0.2, 0),
-  _Crystal(0.92, 0.96, 0.085, 1.25, 0.06),
-  _Crystal(0.91, 0.07, 0.085, 1.1, 0.14),
-  _Crystal(0.06, 0.95, 0.095, 0.45, 0.2),
-  _Crystal(0.04, 0.3, 0.075, 0.9, 0.3),
-  _Crystal(0.96, 0.38, 0.08, 0.3, 0.36),
-  _Crystal(0.46, 0.02, 0.07, 0.6, 0.42),
-  _Crystal(0.93, 0.7, 0.07, 0.75, 0.46),
-  _Crystal(0.06, 0.64, 0.075, 1.4, 0.5),
-  _Crystal(0.42, 0.98, 0.065, 0.15, 0.55),
+  _Crystal(0.07, 0.05, 0.092, 0.2, 0),
+  _Crystal(0.92, 0.96, 0.08, 1.25, 0.05),
+  _Crystal(0.91, 0.07, 0.08, 1.1, 0.11),
+  _Crystal(0.06, 0.95, 0.088, 0.45, 0.16),
+  _Crystal(0.18, 0.14, 0.042, 0.75, 0.2),
+  _Crystal(0.04, 0.3, 0.07, 0.9, 0.24),
+  _Crystal(0.82, 0.17, 0.04, 0.35, 0.28),
+  _Crystal(0.96, 0.38, 0.074, 0.3, 0.31),
+  _Crystal(0.15, 0.86, 0.045, 1.05, 0.35),
+  _Crystal(0.46, 0.02, 0.062, 0.6, 0.38),
+  _Crystal(0.86, 0.85, 0.043, 0.5, 0.42),
+  _Crystal(0.93, 0.7, 0.064, 0.75, 0.45),
+  _Crystal(0.12, 0.46, 0.038, 0.2, 0.48),
+  _Crystal(0.06, 0.64, 0.07, 1.4, 0.51),
+  _Crystal(0.9, 0.52, 0.04, 0.95, 0.54),
+  _Crystal(0.42, 0.98, 0.058, 0.15, 0.57),
+  _Crystal(0.66, 0.05, 0.036, 1.15, 0.6),
+  _Crystal(0.28, 0.95, 0.037, 0.65, 0.64),
 ];
 
 class _CardFacePainter extends CustomPainter {
@@ -383,18 +687,30 @@ class _CardFacePainter extends CustomPainter {
     required this.sheen,
     required this.frost,
     required this.radius,
+    required this.colourway,
+    this.thawing = false,
     this.needles = true,
   });
+
+  /// Which product this face is. Only the fall and the light read it: the bloom,
+  /// the vignette, the specular travel, and the whole freeze are neutral and work
+  /// on any of them.
+  final CardColourway colourway;
 
   final double sheen;
 
   /// How far the freeze has taken hold, from 0 to 1. A continuous value rather
-  /// than a flag, so freezing and thawing are the same code run in opposite
-  /// directions.
+  /// than a flag, so most of the material is one piece of code read in either
+  /// direction.
   final double frost;
 
   /// Corner radius of the face, needed for the rime that hugs the edge.
   final double radius;
+
+  /// True while [frost] is falling. The three layers that carry the change
+  /// itself, rather than the state, read this so a thaw is not a freeze in
+  /// reverse.
+  final bool thawing;
 
   /// Whether to grow crystals. Off for the small face, where they would be a
   /// scribble at that size and are not worth the path.
@@ -408,10 +724,10 @@ class _CardFacePainter extends CustomPainter {
     canvas.drawRect(
       rect,
       Paint()
-        ..shader = const LinearGradient(
+        ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: Palette.gradientCardFace,
+          colors: colourway.fall,
           stops: Palette.cardFaceStops,
         ).createShader(rect),
     );
@@ -440,9 +756,9 @@ class _CardFacePainter extends CustomPainter {
           Offset(size.width * 1.02, size.height * 0.16),
           size.width * 0.8,
           [
-            Palette.cardAzure.withValues(alpha: 0.55),
-            Palette.cardOcean.withValues(alpha: 0.2),
-            Palette.cardOcean.withValues(alpha: 0),
+            colourway.light.withValues(alpha: 0.55),
+            colourway.lightFade.withValues(alpha: 0.2),
+            colourway.lightFade.withValues(alpha: 0),
           ],
           const [0, 0.5, 1],
         ),
@@ -486,55 +802,129 @@ class _CardFacePainter extends CustomPainter {
 
   /// The freeze.
   ///
-  /// Five layers, each a function of [frost], so the whole thing runs backwards
-  /// on a thaw with no separate code path:
+  /// Six layers. Four are pure functions of [frost] and describe the state, so
+  /// they read the same in either direction. Two also read [thawing] and describe
+  /// the change, because a card giving up its ice does not look like the same
+  /// film running backwards:
   ///
-  ///   1. a haze whose clear centre closes as the frost rises, which is what
-  ///      makes the freeze read as spreading inward rather than fading in
-  ///      everywhere at once
-  ///   2. rime thickening along the milled edge
-  ///   3. needles, each waiting its turn, with the wait shorter the nearer it
-  ///      sits to an edge, so growth travels inward behind the haze
-  ///   4. a bright snap that peaks halfway through the change and is gone at
-  ///      both ends, so it fires on freezing and again on thawing but never
-  ///      shows at rest
-  ///   5. the settled veil, which cools and flattens the face
+  ///   1. a haze whose open centre closes as the frost rises, which is what makes
+  ///      the freeze read as spreading inward rather than fading in everywhere at
+  ///      once, with the freeze front riding on the same fill as a narrow bright
+  ///      band sitting exactly at the closing edge. The band is brightest mid run
+  ///      and gone at both rest states, so it crawls inward on a freeze, retreats
+  ///      outward on a thaw, and never shows on a settled card. The centre closes
+  ///      all the way, so a frozen card is iced right across and carries no disc
+  ///      where the front finished
+  ///   2. the sheet, which drains the colour out of the face. Heaviest over the
+  ///      band at the top where the colour actually is, thinnest across the mark,
+  ///      back up over the ink below it
+  ///   3. rime thickening along the milled edge, its light front loaded, so the
+  ///      edge is cold in the first frames of a freeze and is the last thing to
+  ///      give up on a thaw
+  ///   4. needles, each waiting its turn, with the wait shorter the nearer it
+  ///      sits to an edge, so growth travels inward behind the front. Each arm
+  ///      overshoots its length and settles, the way a crystal snaps rather than
+  ///      eases into place. On a thaw the light drains out of them faster than
+  ///      they shorten, because ice leaving a surface thins rather than retracts
+  ///   5. a bright pass carrying the turn itself, near full ice on a freeze where
+  ///      the face locks and near clear on a thaw where the last film breaks.
+  ///      Zero at both ends, so it fires once per change and never shows at rest
+  ///   6. the settled veil, which cools and flattens what is left
+  ///
+  /// Everything here is sized from the width rather than in logical pixels, so a
+  /// thumbnail and a card in the hand ice over to the same proportions.
   ///
   /// Every layer is a plain shader fill or a stroke. There is deliberately no
   /// [MaskFilter] anywhere: an earlier version blurred each needle and drew each
   /// one separately, which came to 576 draw calls per frame with 288 of them
   /// blurred, and that alone was enough to drop frames and take the rasteriser
-  /// down. The needles now accumulate into one [Path] stroked twice, so the whole
-  /// freeze costs five draw calls.
+  /// down. The needles accumulate into one [Path] stroked twice however many of
+  /// them there are, and the front is two extra stops on a gradient that was
+  /// already being filled, so the whole freeze costs seven draw calls at its most
+  /// expensive frame and none of them are blurred.
   void _paintFrost(Canvas canvas, Size size, Rect rect) {
     const ice = Palette.frostIceWhite;
     const pale = Palette.frostIcePale;
 
     // Clamped before it reaches a curve. Curve.transform asserts on anything
-    // outside the unit range, and a tween that overshoots by a float's width
+    // outside the unit range, and a value that overshoots by a float's width
     // would otherwise take the whole frame down.
     final t = frost.clamp(0.0, 1.0);
 
-    // Stops short of the middle even at full frost, so the mark and the scheme
-    // artwork keep their contrast under the ice.
-    final clear = ui.lerpDouble(
-      1.02,
-      0.3,
-      Curves.easeIn.transform(t),
-    )!.clamp(0.0, 0.995);
+    // Open through the middle early on, which is what makes the freeze read as
+    // spreading inward, then closed by the time the card is fully frozen. Held
+    // under 1 so the front band that follows always has somewhere ascending to
+    // sit.
+    //
+    // An earlier pass kept the middle clear even at rest, to protect the mark's
+    // contrast. Against the sheet below it that backfired: what should have been
+    // ice thinning out instead read as a hard dark circle parked behind the mark,
+    // and a card iced everywhere except one disc in the centre is not a frozen
+    // card. The mark keeps enough to sit against from the sheet's own dip across
+    // the middle, which is a soft horizontal band and leaves no shape behind.
+    final clear = ui
+        .lerpDouble(1.02, 0, Curves.easeIn.transform(t))!
+        .clamp(0.0, 0.99);
+    final front = math.sin(math.pi * t);
+    final haze = 0.38 * t;
+    // The centre closing the gap on the edge. Squared, so it is still clearly
+    // open through the middle of the run and only fills as the face locks.
+    final core = haze * t * t;
     canvas.drawRect(
       rect,
       Paint()
         ..shader = ui.Gradient.radial(
           rect.center,
           size.width * 0.78,
-          [pale.withValues(alpha: 0), pale.withValues(alpha: 0.26 * t)],
-          [clear, 1],
+          [
+            pale.withValues(alpha: core),
+            ice.withValues(alpha: (haze + 0.3 * front).clamp(0.0, 1.0)),
+            pale.withValues(alpha: haze),
+          ],
+          [clear, math.min(clear + 0.07, 0.995), 1],
         ),
     );
 
+    // The sheet, and the layer that does the actual work of reading as frozen.
+    //
+    // Everything else in here is edge and detail, and an earlier pass had only
+    // those: the corners iced over, needles grew, and the saturated band across
+    // the top of the face came through the lot of it untouched, so a frozen card
+    // still read as a live card with weather on it. Colour is what has to go.
+    //
+    // Heaviest exactly where the colour is, thinnest across the middle where the
+    // brand mark needs something dark to sit against, and back up over the ink at
+    // the bottom so no part of the face is left out of it.
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            pale.withValues(alpha: 0.68 * t),
+            pale.withValues(alpha: 0.5 * t),
+            // The dip. Held low because the haze above now covers the middle in
+            // its own right, so this no longer has to be the only ice over the
+            // mark, and because the two stacked would take the white mark under
+            // three to one against its background. Being a soft stop on a
+            // vertical ramp, it leaves no edge and no shape.
+            ice.withValues(alpha: 0.1 * t),
+            pale.withValues(alpha: 0.26 * t),
+            pale.withValues(alpha: 0.34 * t),
+          ],
+          stops: const [0, 0.28, 0.5, 0.76, 1],
+        ).createShader(rect),
+    );
+
     // Rime along the milled edge, graded outward rather than blurred.
-    final thickness = 2 + 6 * t;
+    //
+    // A share of the width rather than a count of logical pixels. A fixed eight
+    // pixel band is a milled edge on a card in the hand and a heavy frame on a
+    // ninety six pixel thumbnail, which is what made the frozen cards in the
+    // dashboard strip look as though they sat a size larger than their
+    // neighbours.
+    final thickness = size.width * (0.008 + 0.026 * t);
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         rect.deflate(thickness / 2),
@@ -546,7 +936,10 @@ class _CardFacePainter extends CustomPainter {
         ..shader = ui.Gradient.radial(
           rect.center,
           size.width * 0.72,
-          [ice.withValues(alpha: 0), ice.withValues(alpha: 0.34 * t)],
+          [
+            ice.withValues(alpha: 0),
+            ice.withValues(alpha: 0.42 * Curves.easeOutQuad.transform(t)),
+          ],
           const [0.5, 1],
         ),
     );
@@ -562,8 +955,12 @@ class _CardFacePainter extends CustomPainter {
         );
         if (local <= 0) continue;
 
+        // Overshoot and settle. Clamped, because the overshoot goes past one and
+        // an arm longer than its own cell would cross a neighbour.
         final arm =
-            crystal.r * size.width * Curves.easeOutCubic.transform(local);
+            crystal.r *
+            size.width *
+            Motion.settle.transform(local).clamp(0.0, 1.08);
         // Below a pixel there is nothing to see, and a round cap would leave a
         // dot where no crystal has grown yet.
         if (arm < 1) continue;
@@ -578,32 +975,46 @@ class _CardFacePainter extends CustomPainter {
       }
 
       if (any) {
+        // Squared on a thaw, so a needle is out of sight well before it has
+        // finished shortening and the ice reads as thinning off the face rather
+        // than being pulled back into it.
+        final lit = thawing ? t * t : t;
         // Two strokes over the same path: a wide soft one for body, a narrow
-        // bright one for the crystal itself.
+        // bright one for the crystal itself. Both taken from the width, so a
+        // needle on a thumbnail is the same weight relative to its card as one on
+        // a card in the hand, and neither ends up as line art laid over the face.
+        final line = size.width * 0.004;
         canvas.drawPath(
           path,
           Paint()
             ..style = PaintingStyle.stroke
             ..strokeCap = StrokeCap.round
-            ..strokeWidth = 2.8
-            ..color = pale.withValues(alpha: 0.3 * t),
+            ..strokeWidth = line * 2.8
+            ..color = pale.withValues(alpha: 0.26 * lit),
         );
         canvas.drawPath(
           path,
           Paint()
             ..style = PaintingStyle.stroke
             ..strokeCap = StrokeCap.round
-            ..strokeWidth = 1
-            ..color = ice.withValues(alpha: 0.78 * t),
+            ..strokeWidth = line
+            // Held down from the value an earlier pass used. Bright white line
+            // work on a smooth face reads as a decal stuck on the card; the same
+            // shape a little dimmer reads as crystal in the ice above it.
+            ..color = ice.withValues(alpha: 0.56 * lit),
         );
       }
     }
 
-    final snap = math.sin(math.pi * t);
-    if (snap > 0.01) {
+    // The turn. Same pulse the face squeezes on, so the flash and the recoil are
+    // one event rather than two things that happen to coincide. Below the
+    // threshold the fill would be under two values of white, which is not worth
+    // a draw call.
+    final event = _lockEvent(t, thawing);
+    if (event > 0.04) {
       canvas.drawRect(
         rect,
-        Paint()..color = ice.withValues(alpha: 0.15 * snap),
+        Paint()..color = ice.withValues(alpha: (thawing ? 0.11 : 0.17) * event),
       );
     }
 
@@ -615,12 +1026,7 @@ class _CardFacePainter extends CustomPainter {
   ///
   /// Appends rather than draws, so every needle on the face ends up in a single
   /// path and costs one rasterisation between them.
-  static void _needle(
-    Path path,
-    Offset centre,
-    double arm,
-    double rotation,
-  ) {
+  static void _needle(Path path, Offset centre, double arm, double rotation) {
     for (var i = 0; i < 6; i++) {
       final angle = rotation + i * math.pi / 3;
       final direction = Offset(math.cos(angle), math.sin(angle));
@@ -646,7 +1052,9 @@ class _CardFacePainter extends CustomPainter {
   bool shouldRepaint(covariant _CardFacePainter oldDelegate) =>
       oldDelegate.sheen != sheen ||
       oldDelegate.frost != frost ||
+      oldDelegate.thawing != thawing ||
       oldDelegate.radius != radius ||
+      oldDelegate.colourway != colourway ||
       oldDelegate.needles != needles;
 }
 
@@ -686,37 +1094,50 @@ class MiniCardFace extends StatelessWidget {
               sheen: 0,
               frost: card.status == CardStatus.frozen ? 1 : 0,
               radius: AppRadius.sm,
+              colourway: colourwayFor(card.id),
               needles: false,
             ),
-            child: Padding(
-              padding: EdgeInsets.all(width * 0.1),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    card.last4,
-                    style: AppType.numericSmall.copyWith(
-                      color: Palette.frostInk.withValues(alpha: 0.72),
-                      fontSize: width * 0.11,
-                      letterSpacing: 0.6,
-                    ),
-                  ),
-                  Expanded(
-                    child: Center(
-                      child: FrostGlyph(
-                        width: width * 0.5,
-                        excludeSemantics: true,
+            child: DecoratedBox(
+              // The same milled edge the full face carries, and the reason a
+              // strip of these lines up. The bottom of an active card is near
+              // black and the backdrop behind it is near black too, so without a
+              // hairline its lower corners simply are not there, while a frozen
+              // card beside it holds a clear pale edge for its whole height. Two
+              // cards the same size read as two different sizes.
+              decoration: BoxDecoration(
+                borderRadius: border,
+                border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+              ),
+              child: Padding(
+                padding: EdgeInsets.all(width * 0.1),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      card.last4,
+                      style: AppType.numericSmall.copyWith(
+                        color: Palette.frostInk.withValues(alpha: 0.72),
+                        fontSize: width * 0.11,
+                        letterSpacing: 0.6,
                       ),
                     ),
-                  ),
-                  Text(
-                    card.kind.label.toUpperCase(),
-                    style: AppType.labelSmall.copyWith(
-                      color: Colors.white.withValues(alpha: 0.86),
-                      fontSize: width * 0.09,
+                    Expanded(
+                      child: Center(
+                        child: FrostGlyph(
+                          width: width * 0.5,
+                          excludeSemantics: true,
+                        ),
+                      ),
                     ),
-                  ),
-                ],
+                    Text(
+                      card.kind.label.toUpperCase(),
+                      style: AppType.labelSmall.copyWith(
+                        color: Colors.white.withValues(alpha: 0.86),
+                        fontSize: width * 0.09,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -739,9 +1160,7 @@ class AddCardTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = context.tokens;
-    final line = onBrand
-        ? Colors.white.withValues(alpha: 0.26)
-        : tokens.border;
+    final line = onBrand ? Colors.white.withValues(alpha: 0.26) : tokens.border;
     final ink = onBrand ? Colors.white : tokens.interactivePrimary;
 
     return SizedBox(
@@ -823,11 +1242,7 @@ class CardPageDots extends StatelessWidget {
 }
 
 class _Dot extends StatelessWidget {
-  const _Dot({
-    required this.weight,
-    required this.active,
-    required this.track,
-  });
+  const _Dot({required this.weight, required this.active, required this.track});
 
   final double weight;
   final Color active;
