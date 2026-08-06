@@ -124,6 +124,20 @@ final txnFilterProvider = NotifierProvider<TxnFilterController, TxnFilter>(
   TxnFilterController.new,
 );
 
+/// Tracks whether the user has dismissed the launch advertisement.
+final openingAdDismissedProvider =
+    NotifierProvider<OpeningAdDismissedController, bool>(
+      OpeningAdDismissedController.new,
+    );
+
+class OpeningAdDismissedController extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void dismiss() => state = true;
+  void reset() => state = false;
+}
+
 /// Reads. Every one of these renders through an async value, so loading,
 /// empty, and error states come from one place in the presentation layer.
 final accountsProvider = FutureProvider<List<Account>>(

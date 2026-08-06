@@ -14,10 +14,16 @@ MockDataSource _instantSource() =>
     MockDataSource(now: DateTime(2026, 8, 5))
       ..latencyOverride = (() => Duration.zero);
 
+class _DismissedAdController extends OpeningAdDismissedController {
+  @override
+  bool build() => true;
+}
+
 Widget _harness(Widget child, {MockDataSource? source}) => ProviderScope(
   retry: noAutomaticRetry,
   overrides: [
     mockDataSourceProvider.overrideWithValue(source ?? _instantSource()),
+    openingAdDismissedProvider.overrideWith(_DismissedAdController.new),
   ],
   child: MaterialApp(theme: AppTheme.light(), home: child),
 );

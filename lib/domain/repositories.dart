@@ -128,11 +128,22 @@ abstract interface class SplitBillRepository {
 
   Future<SplitBill> fetchSplitBill(String id);
 
+  /// Create a bill with a specific split mode.
+  ///
+  /// [splitMode] defaults to [SplitMode.equal].
+  /// [customAmounts] is required when [splitMode] == [SplitMode.custom];
+  /// length must match [participantNames].length + 1 (host first).
+  /// [percentages] is required when [splitMode] == [SplitMode.percentage];
+  /// same length rule, must sum to 100.
   Future<SplitBill> createSplitBill({
     required String title,
     required double totalAmount,
     required String category,
     required List<String> participantNames,
+    SplitMode splitMode = SplitMode.equal,
+    List<double>? customAmounts,
+    List<double>? percentages,
+    String? description,
   });
 
   Future<bool> confirmPayment({
@@ -140,6 +151,13 @@ abstract interface class SplitBillRepository {
     required String participantId,
     String? payingAccountId,
     String currencyCode = 'USD',
+  });
+
+  /// Join an existing bill as a new participant.
+  /// Returns the updated [SplitBill] or null when the bill isn't found.
+  Future<SplitBill?> joinBill({
+    required String billId,
+    required String participantName,
   });
 }
 

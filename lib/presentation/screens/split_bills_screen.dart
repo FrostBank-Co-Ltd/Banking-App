@@ -15,7 +15,10 @@ import 'create_split_bill_screen.dart';
 import 'qr_scanner_screen.dart';
 import 'split_bill_detail_screen.dart';
 
-/// Finance Hub: Split Bills management screen.
+// ---------------------------------------------------------------------------
+// Split Bills Screen
+// ---------------------------------------------------------------------------
+
 class SplitBillsScreen extends ConsumerStatefulWidget {
   const SplitBillsScreen({super.key});
 
@@ -26,23 +29,19 @@ class SplitBillsScreen extends ConsumerStatefulWidget {
 class _SplitBillsScreenState extends ConsumerState<SplitBillsScreen> {
   int _selectedTab = 0; // 0: Active, 1: Settled, 2: All
 
-  void _openCreateExpense() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const CreateSplitBillScreen()),
-    );
-  }
+  void _openCreateExpense() => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const CreateSplitBillScreen()),
+      );
 
-  void _openScanQr() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const QrScannerScreen()),
-    );
-  }
+  void _openScanQr() => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const QrScannerScreen()),
+      );
 
-  void _openDetail(String billId) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => SplitBillDetailScreen(billId: billId)),
-    );
-  }
+  void _openDetail(String billId) => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => SplitBillDetailScreen(billId: billId),
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -64,8 +63,10 @@ class _SplitBillsScreenState extends ConsumerState<SplitBillsScreen> {
     );
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F8FE), // Touch of light blue tint for window
+      // Theme-adaptive background — respects light/dark mode.
+      backgroundColor: tokens.backgroundAlt,
       appBar: AppBar(
+        backgroundColor: tokens.backgroundAlt,
         title: const Text('Split Bills'),
         actions: [
           IconButton(
@@ -84,7 +85,7 @@ class _SplitBillsScreenState extends ConsumerState<SplitBillsScreen> {
             Space.x16 + Space.x8,
           ),
           children: [
-            // Summary Banner Card with EXACT Dashboard FrostBackdrop Gradient (default glow = 0.34)
+            // ── Summary banner ─────────────────────────────────────────────
             FrostBackdrop(
               borderRadius: AppRadius.all(AppRadius.lg),
               child: Padding(
@@ -117,7 +118,8 @@ class _SplitBillsScreenState extends ConsumerState<SplitBillsScreen> {
                               backgroundColor: Colors.white,
                               foregroundColor: Palette.frostBaseBottom,
                               elevation: 4,
-                              textStyle: AppType.labelLarge.copyWith(fontWeight: FontWeight.bold),
+                              textStyle: AppType.labelLarge
+                                  .copyWith(fontWeight: FontWeight.bold),
                             ),
                           ),
                         ),
@@ -125,7 +127,10 @@ class _SplitBillsScreenState extends ConsumerState<SplitBillsScreen> {
                         Expanded(
                           child: OutlinedButton.icon(
                             onPressed: _openScanQr,
-                            icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
+                            icon: const Icon(
+                              Icons.qr_code_scanner_rounded,
+                              size: 18,
+                            ),
                             label: const Text('Scan QR'),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: Colors.white,
@@ -144,7 +149,7 @@ class _SplitBillsScreenState extends ConsumerState<SplitBillsScreen> {
             ),
             const SizedBox(height: Space.x6),
 
-            // Tab Filters
+            // ── Tab filter ─────────────────────────────────────────────────
             SegmentedButton<int>(
               segments: [
                 ButtonSegment(
@@ -162,11 +167,8 @@ class _SplitBillsScreenState extends ConsumerState<SplitBillsScreen> {
               ],
               selected: {_selectedTab},
               showSelectedIcon: false,
-              onSelectionChanged: (selection) {
-                setState(() {
-                  _selectedTab = selection.first;
-                });
-              },
+              onSelectionChanged: (sel) =>
+                  setState(() => _selectedTab = sel.first),
               style: SegmentedButton.styleFrom(
                 backgroundColor: tokens.surface,
                 foregroundColor: tokens.textSecondary,
@@ -178,13 +180,14 @@ class _SplitBillsScreenState extends ConsumerState<SplitBillsScreen> {
             ),
             const SizedBox(height: Space.x6),
 
-            // Bills List or Empty State
+            // ── Bills list ─────────────────────────────────────────────────
             if (displayedBills.isEmpty)
               EmptyStateView(
                 heading: _selectedTab == 1
                     ? 'No settled bills'
                     : 'No split bills found',
-                message: 'Create a split bill to manage shared expenses with friends.',
+                message:
+                    'Create a split bill to manage shared expenses with friends.',
                 actionLabel: 'Create Expense',
                 icon: Icons.groups_rounded,
                 onAction: _openCreateExpense,
@@ -217,6 +220,10 @@ class _SplitBillsScreenState extends ConsumerState<SplitBillsScreen> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Bill list card
+// ---------------------------------------------------------------------------
+
 class _SplitBillCard extends StatelessWidget {
   const _SplitBillCard({required this.bill, required this.onTap});
 
@@ -229,7 +236,8 @@ class _SplitBillCard extends StatelessWidget {
 
     return Pressable(
       onTap: onTap,
-      semanticLabel: '${bill.title}, ${bill.category}, total ${bill.totalAmount}, ${bill.isSettled ? 'Settled' : '${bill.paidCount} of ${bill.totalCount} paid'}',
+      semanticLabel: '${bill.title}, ${bill.category}, total ${bill.totalAmount}, '
+          '${bill.isSettled ? 'Settled' : '${bill.paidCount} of ${bill.totalCount} paid'}',
       borderRadius: AppRadius.lg,
       child: Container(
         padding: const EdgeInsets.all(Space.x4),
@@ -275,7 +283,7 @@ class _SplitBillCard extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '${bill.category} • ${Dates.relative(bill.createdAt)}',
+                        '${bill.category} · ${Dates.relative(bill.createdAt)}',
                         style: AppType.bodySmall.copyWith(
                           color: tokens.textSecondary,
                         ),
@@ -291,7 +299,12 @@ class _SplitBillCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: Space.x4),
+            const SizedBox(height: Space.x3),
+
+            // Split mode chip
+            _SplitModeChip(bill.splitMode, tokens: tokens),
+            const SizedBox(height: Space.x3),
+
             // Progress bar
             ClipRRect(
               borderRadius: AppRadius.all(AppRadius.pill),
@@ -300,9 +313,7 @@ class _SplitBillCard extends StatelessWidget {
                 minHeight: 6,
                 backgroundColor: tokens.surface,
                 valueColor: AlwaysStoppedAnimation<Color>(
-                  bill.isSettled
-                      ? Colors.green
-                      : tokens.interactivePrimary,
+                  bill.isSettled ? Colors.green : tokens.interactivePrimary,
                 ),
               ),
             ),
@@ -315,9 +326,7 @@ class _SplitBillCard extends StatelessWidget {
                       ? 'Fully Paid'
                       : '${bill.paidCount} of ${bill.totalCount} Paid',
                   style: AppType.labelSmall.copyWith(
-                    color: bill.isSettled
-                        ? Colors.green
-                        : tokens.textSecondary,
+                    color: bill.isSettled ? Colors.green : tokens.textSecondary,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -326,9 +335,8 @@ class _SplitBillCard extends StatelessWidget {
                     children: [
                       Text(
                         'Remaining: ',
-                        style: AppType.bodySmall.copyWith(
-                          color: tokens.textSecondary,
-                        ),
+                        style: AppType.bodySmall
+                            .copyWith(color: tokens.textSecondary),
                       ),
                       MoneyText(
                         bill.remainingBalance,
@@ -341,6 +349,52 @@ class _SplitBillCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Split mode chip
+// ---------------------------------------------------------------------------
+
+class _SplitModeChip extends StatelessWidget {
+  const _SplitModeChip(this.mode, {required this.tokens});
+
+  final SplitMode mode;
+  final AppTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, icon) = switch (mode) {
+      SplitMode.equal => ('Equal', Icons.balance_rounded),
+      SplitMode.custom => ('Custom', Icons.edit_rounded),
+      SplitMode.percentage => ('Percentage', Icons.pie_chart_rounded),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: Space.x2,
+        vertical: 2,
+      ),
+      decoration: BoxDecoration(
+        color: tokens.interactiveSecondary,
+        borderRadius: AppRadius.all(AppRadius.pill),
+        border: Border.all(color: tokens.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: tokens.interactivePrimary),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: AppType.labelSmall.copyWith(
+              color: tokens.interactivePrimary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }

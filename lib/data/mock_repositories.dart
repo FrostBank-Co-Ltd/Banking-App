@@ -161,11 +161,13 @@ class MockSplitBillRepository implements SplitBillRepository {
   MockSplitBillRepository(this._source) {
     final now = DateTime.now();
     _bills = [
+      // ── Equal split – 4-way lunch ───────────────────────────────────────
       SplitBill(
         id: 'bill_1',
-        title: 'Team Lunch at Luigi\'s',
+        title: "Team Lunch at Luigi's",
         totalAmount: 120.00,
         category: 'Food & Dining',
+        splitMode: SplitMode.equal,
         createdAt: now.subtract(const Duration(days: 2)),
         createdBy: 'You (Host)',
         participants: const [
@@ -192,33 +194,71 @@ class MockSplitBillRepository implements SplitBillRepository {
             name: 'Charlie Brown',
             shareAmount: 30.00,
             status: SplitParticipantStatus.pending,
+            note: 'Ordered the steak',
           ),
         ],
       ),
+      // ── Custom-amount split – cabin rental ──────────────────────────────
       SplitBill(
         id: 'bill_2',
         title: 'Weekend Cabin Rental',
         totalAmount: 300.00,
         category: 'Travel & Lodging',
+        splitMode: SplitMode.custom,
         createdAt: now.subtract(const Duration(days: 5)),
         createdBy: 'You (Host)',
         participants: const [
           SplitBillParticipant(
             id: 'p2_host',
             name: 'You (Host)',
-            shareAmount: 100.00,
+            shareAmount: 150.00,
             status: SplitParticipantStatus.paid,
+            note: 'Booked the cabin',
           ),
           SplitBillParticipant(
             id: 'p2_david',
             name: 'David Lee',
-            shareAmount: 100.00,
+            shareAmount: 80.00,
             status: SplitParticipantStatus.pending,
           ),
           SplitBillParticipant(
             id: 'p2_emma',
             name: 'Emma Watson',
+            shareAmount: 70.00,
+            status: SplitParticipantStatus.pending,
+          ),
+        ],
+      ),
+      // ── Percentage split – concert tickets ─────────────────────────────
+      SplitBill(
+        id: 'bill_3',
+        title: 'Concert Tickets',
+        totalAmount: 200.00,
+        category: 'Entertainment',
+        splitMode: SplitMode.percentage,
+        description: 'Front-row tickets for the jazz festival',
+        createdAt: now.subtract(const Duration(days: 1)),
+        createdBy: 'You (Host)',
+        participants: const [
+          SplitBillParticipant(
+            id: 'p3_host',
+            name: 'You (Host)',
             shareAmount: 100.00,
+            sharePercentage: 50,
+            status: SplitParticipantStatus.paid,
+          ),
+          SplitBillParticipant(
+            id: 'p3_sophia',
+            name: 'Sophia Turner',
+            shareAmount: 60.00,
+            sharePercentage: 30,
+            status: SplitParticipantStatus.pending,
+          ),
+          SplitBillParticipant(
+            id: 'p3_liam',
+            name: 'Liam Chen',
+            shareAmount: 40.00,
+            sharePercentage: 20,
             status: SplitParticipantStatus.pending,
           ),
         ],
@@ -247,48 +287,33 @@ class MockSplitBillRepository implements SplitBillRepository {
     required double totalAmount,
     required String category,
     required List<String> participantNames,
+    SplitMode splitMode = SplitMode.equal,
+    List<double>? customAmounts,
+    List<double>? percentages,
+    String? description,
   }) async {
     final now = DateTime.now();
     final billId = 'bill_${now.millisecondsSinceEpoch}';
 
-    final cleanNames = participantNames
-        .map((name) => name.trim())
-        .where((name) => name.isNotEmpty)
-        .toList();
-
-    final allParticipants = <SplitBillParticipant>[];
-    final totalPeople = cleanNames.length + 1;
-    final share = (totalAmount / totalPeople);
-
-    allParticipants.add(
-      SplitBillParticipant(
-        id: 'p_${billId}_host',
-        name: 'You (Host)',
-        shareAmount: share,
-        status: SplitParticipantStatus.paid,
-        paidAt: now,
-      ),
+    final participants = buildParticipants(
+      billId: billId,
+      totalAmount: totalAmount,
+      mode: splitMode,
+      names: participantNames,
+      customAmounts: customAmounts,
+      percentages: percentages,
     );
-
-    for (var i = 0; i < cleanNames.length; i++) {
-      allParticipants.add(
-        SplitBillParticipant(
-          id: 'p_${billId}_$i',
-          name: cleanNames[i],
-          shareAmount: share,
-          status: SplitParticipantStatus.pending,
-        ),
-      );
-    }
 
     final newBill = SplitBill(
       id: billId,
       title: title.trim().isEmpty ? 'Split Bill' : title.trim(),
       totalAmount: totalAmount,
       category: category.trim().isEmpty ? 'General' : category.trim(),
+      splitMode: splitMode,
+      description: description,
       createdAt: now,
       createdBy: 'You (Host)',
-      participants: allParticipants,
+      participants: participants,
     );
 
     _bills.insert(0, newBill);
@@ -317,10 +342,8 @@ class MockSplitBillRepository implements SplitBillRepository {
       paidAt: DateTime.now(),
     );
 
-    final updatedParticipants =
-        List<SplitBillParticipant>.from(bill.participants);
+    final updatedParticipants = List<SplitBillParticipant>.from(bill.participants);
     updatedParticipants[pIndex] = updatedParticipant;
-
     _bills[billIndex] = bill.copyWith(participants: updatedParticipants);
 
     final accountId = payingAccountId ?? 'acc_wallet';
@@ -337,15 +360,51 @@ class MockSplitBillRepository implements SplitBillRepository {
       type: TxnType.qrPayment,
       status: TxnStatus.completed,
       date: now,
-      reference:
-          'SPLIT-${bill.id.substring(0, bill.id.length.clamp(0, 6)).toUpperCase()}',
+      reference: 'SPLIT-${bill.id.substring(0, bill.id.length.clamp(0, 6)).toUpperCase()}',
       note: 'Paid share for ${bill.title}',
     );
 
     _source.addTransaction(txn);
     _source.deductAccountBalance(accountId, participant.shareAmount);
-
     return true;
+  }
+
+  @override
+  Future<SplitBill?> joinBill({
+    required String billId,
+    required String participantName,
+  }) async {
+    final billIndex = _bills.indexWhere((b) => b.id == billId);
+    if (billIndex == -1) return null;
+
+    final bill = _bills[billIndex];
+    final cleanName = participantName.trim();
+    if (cleanName.isEmpty) return bill;
+
+    // Guard: don't add duplicates.
+    final alreadyIn = bill.participants.any(
+      (p) => p.name.toLowerCase() == cleanName.toLowerCase(),
+    );
+    if (alreadyIn) return bill;
+
+    // Recalculate equal share for all participants including the new joiner.
+    final newTotal = bill.participants.length + 1;
+    final newShare = bill.totalAmount / newTotal;
+
+    final updatedParticipants = [
+      for (final p in bill.participants)
+        p.copyWith(shareAmount: newShare),
+      SplitBillParticipant(
+        id: 'p_${billId}_join_${DateTime.now().millisecondsSinceEpoch}',
+        name: cleanName,
+        shareAmount: newShare,
+        status: SplitParticipantStatus.pending,
+      ),
+    ];
+
+    final updated = bill.copyWith(participants: updatedParticipants);
+    _bills[billIndex] = updated;
+    return updated;
   }
 }
 
