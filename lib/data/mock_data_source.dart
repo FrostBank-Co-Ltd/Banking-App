@@ -260,6 +260,9 @@ class MockDataSource {
       final newStatus = old.status == CardStatus.active
           ? CardStatus.frozen
           : CardStatus.active;
+      // Replaced where it sits, never removed and re-added. The deck addresses
+      // cards by position, so moving one here would move it under the holder's
+      // thumb: freeze the card in front and a different card would be in front.
       final updated = BankCard(
         id: old.id,
         accountId: old.accountId,
@@ -340,7 +343,10 @@ class MockDataSource {
     if (index != -1) {
       final old = _accounts[index];
       final newTotal = (old.totalBalance - amount).clamp(0.0, double.infinity);
-      final newAvail = (old.availableBalance - amount).clamp(0.0, double.infinity);
+      final newAvail = (old.availableBalance - amount).clamp(
+        0.0,
+        double.infinity,
+      );
       _accounts[index] = Account(
         id: old.id,
         name: old.name,
@@ -500,19 +506,19 @@ class MockDataSource {
   // ---------------------------------------------------------------------------
 
   Future<List<GoalSave>> goals() => read(
-        'savings',
-        () => List<GoalSave>.unmodifiable(
-          List.of(_goals)..sort((a, b) => b.createdAt.compareTo(a.createdAt)),
-        ),
-      );
+    'savings',
+    () => List<GoalSave>.unmodifiable(
+      List.of(_goals)..sort((a, b) => b.createdAt.compareTo(a.createdAt)),
+    ),
+  );
 
   Future<GoalSave> goal(String id) => read('savings', () {
-        final match = _goals.where((g) => g.id == id).firstOrNull;
-        if (match == null) {
-          throw const RepositoryFailure('That goal is no longer available.');
-        }
-        return match;
-      });
+    final match = _goals.where((g) => g.id == id).firstOrNull;
+    if (match == null) {
+      throw const RepositoryFailure('That goal is no longer available.');
+    }
+    return match;
+  });
 
   Future<GoalSave> openGoal({
     required String name,
@@ -537,15 +543,17 @@ class MockDataSource {
     _goals.add(newGoal);
 
     if (initialDeposit > 0) {
-      _goalTxns.add(GoalTxn(
-        id: 'gtxn_${DateTime.now().millisecondsSinceEpoch}',
-        goalId: newGoal.id,
-        kind: GoalTxnKind.transferIn,
-        amount: initialDeposit,
-        runningBalance: initialDeposit,
-        date: DateTime.now(),
-        note: 'Initial deposit',
-      ));
+      _goalTxns.add(
+        GoalTxn(
+          id: 'gtxn_${DateTime.now().millisecondsSinceEpoch}',
+          goalId: newGoal.id,
+          kind: GoalTxnKind.transferIn,
+          amount: initialDeposit,
+          runningBalance: initialDeposit,
+          date: DateTime.now(),
+          note: 'Initial deposit',
+        ),
+      );
     }
     return newGoal;
   }
@@ -561,18 +569,22 @@ class MockDataSource {
     }
     final old = _goals[index];
     if (old.status != GoalSaveStatus.active) {
-      throw const RepositoryFailure('You can only add funds to an active goal.');
+      throw const RepositoryFailure(
+        'You can only add funds to an active goal.',
+      );
     }
     final updated = old.copyWith(balance: old.balance + amount);
     _goals[index] = updated;
-    _goalTxns.add(GoalTxn(
-      id: 'gtxn_${DateTime.now().millisecondsSinceEpoch}',
-      goalId: goalId,
-      kind: GoalTxnKind.transferIn,
-      amount: amount,
-      runningBalance: updated.balance,
-      date: DateTime.now(),
-    ));
+    _goalTxns.add(
+      GoalTxn(
+        id: 'gtxn_${DateTime.now().millisecondsSinceEpoch}',
+        goalId: goalId,
+        kind: GoalTxnKind.transferIn,
+        amount: amount,
+        runningBalance: updated.balance,
+        date: DateTime.now(),
+      ),
+    );
     return updated;
   }
 
@@ -588,22 +600,26 @@ class MockDataSource {
     final old = _goals[index];
     if (old.status != GoalSaveStatus.active) {
       throw const RepositoryFailure(
-          'You can only withdraw from an active goal.');
+        'You can only withdraw from an active goal.',
+      );
     }
     if (amount > old.balance) {
       throw const RepositoryFailure(
-          'Withdrawal amount exceeds the goal balance.');
+        'Withdrawal amount exceeds the goal balance.',
+      );
     }
     final updated = old.copyWith(balance: old.balance - amount);
     _goals[index] = updated;
-    _goalTxns.add(GoalTxn(
-      id: 'gtxn_${DateTime.now().millisecondsSinceEpoch}',
-      goalId: goalId,
-      kind: GoalTxnKind.transferOut,
-      amount: amount,
-      runningBalance: updated.balance,
-      date: DateTime.now(),
-    ));
+    _goalTxns.add(
+      GoalTxn(
+        id: 'gtxn_${DateTime.now().millisecondsSinceEpoch}',
+        goalId: goalId,
+        kind: GoalTxnKind.transferOut,
+        amount: amount,
+        runningBalance: updated.balance,
+        date: DateTime.now(),
+      ),
+    );
     return updated;
   }
 
@@ -617,25 +633,24 @@ class MockDataSource {
     final updated = old.copyWith(status: GoalSaveStatus.closed, balance: 0);
     _goals[index] = updated;
     if (old.balance > 0) {
-      _goalTxns.add(GoalTxn(
-        id: 'gtxn_${DateTime.now().millisecondsSinceEpoch}',
-        goalId: id,
-        kind: GoalTxnKind.transferOut,
-        amount: old.balance,
-        runningBalance: 0,
-        date: DateTime.now(),
-        note: 'Goal closed — funds returned',
-      ));
+      _goalTxns.add(
+        GoalTxn(
+          id: 'gtxn_${DateTime.now().millisecondsSinceEpoch}',
+          goalId: id,
+          kind: GoalTxnKind.transferOut,
+          amount: old.balance,
+          runningBalance: 0,
+          date: DateTime.now(),
+          note: 'Goal closed — funds returned',
+        ),
+      );
     }
     return updated;
   }
 
-  Future<List<GoalTxn>> goalTransactions(String goalId) =>
-      read('savings', () {
-        final rows = _goalTxns
-            .where((t) => t.goalId == goalId)
-            .toList()
-          ..sort((a, b) => b.date.compareTo(a.date));
-        return List<GoalTxn>.unmodifiable(rows);
-      });
+  Future<List<GoalTxn>> goalTransactions(String goalId) => read('savings', () {
+    final rows = _goalTxns.where((t) => t.goalId == goalId).toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+    return List<GoalTxn>.unmodifiable(rows);
+  });
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -85,7 +86,7 @@ class _CardsScreenState extends ConsumerState<CardsScreen> {
   }
 }
 
-class _Deck extends ConsumerWidget {
+class _Deck extends ConsumerStatefulWidget {
   const _Deck({
     required this.cards,
     required this.index,
@@ -97,8 +98,100 @@ class _Deck extends ConsumerWidget {
   final ValueChanged<int> onPageChanged;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_Deck> createState() => _DeckState();
+}
+
+class _DeckState extends ConsumerState<_Deck> {
+  /// The card whose freeze is out with the bank, and the state it was asked to
+  /// take. Held here rather than read from [cardsControllerProvider], which is
+  /// shared with issuing a card and would put frost on the wrong face.
+  String? _requestedId;
+  CardStatus? _requestedStatus;
+
+  /// The card whose face should be showing a freeze in flight: the one that was
+  /// asked to change and has not yet come back changed. Testing the status as
+  /// well as the id means it does not matter whether the refreshed deck or the
+  /// write's own callback lands first, so the face goes from taking hold to
+  /// locked in one movement either way.
+  String? get _pendingCardId {
+    final id = _requestedId;
+    if (id == null) return null;
+    for (final card in widget.cards) {
+      if (card.id != id) continue;
+      return card.status == _requestedStatus ? null : id;
+    }
+    return id;
+  }
+
+  Future<void> _toggleFreeze(BankCard card) async {
+    if (_requestedId != null) return;
+
+    final wanted = card.status == CardStatus.frozen
+        ? CardStatus.active
+        : CardStatus.frozen;
+    setState(() {
+      _requestedId = card.id;
+      _requestedStatus = wanted;
+    });
+
+    final ok = await ref
+        .read(cardsControllerProvider.notifier)
+        .toggleFreeze(card.id);
+
+    // The write invalidates the read providers, so the deck is refetching by
+    // the time it returns. Waiting for that means the frost goes from taking
+    // hold straight through to locked, instead of falling back to nothing for
+    // the length of the refetch and starting again.
+    if (ok) {
+      try {
+        await ref.read(cardsProvider.future);
+      } on Object {
+        // The section below handles a failed read. Nothing to add here beyond
+        // releasing the pending face, which happens either way.
+      }
+    }
+    if (!mounted) return;
+
+    final state = ref.read(cardsControllerProvider);
+    setState(() {
+      _requestedId = null;
+      _requestedStatus = null;
+    });
+
+    if (ok) {
+      // Feedback: the write has landed and the ice is going in, confirmed in the
+      // hand. A freeze lands heavier than a thaw, so the two are told apart
+      // without looking.
+      if (wanted == CardStatus.frozen) {
+        HapticFeedback.mediumImpact();
+      } else {
+        HapticFeedback.lightImpact();
+      }
+    }
+
+    final message = switch (state) {
+      CardSuccess(:final card) =>
+        card.status == CardStatus.frozen
+            ? '${card.label} is now frozen.'
+            : '${card.label} is now active.',
+      CardError(:final message) => message,
+      _ => 'Something went wrong.',
+    };
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        // The frost takes a beat to settle, so the confirmation waits rather
+        // than covering it.
+        duration: ok ? const Duration(seconds: 2) : const Duration(seconds: 4),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final tokens = context.tokens;
+    final cards = widget.cards;
+    final index = widget.index;
     final card = cards[index];
 
     return Column(
@@ -110,8 +203,9 @@ class _Deck extends ConsumerWidget {
           child: CardCarousel(
             cards: cards,
             initialIndex: index,
-            onPageChanged: onPageChanged,
+            onPageChanged: widget.onPageChanged,
             onCardTap: (tapped) => context.push('/card/${tapped.id}'),
+            pendingCardId: _pendingCardId,
           ),
         ),
         const SizedBox(height: Space.x6),
@@ -187,33 +281,11 @@ class _Deck extends ConsumerWidget {
                         label: card.status == CardStatus.frozen
                             ? 'Unfreeze'
                             : 'Freeze',
-                        onTap: () async {
-                          final controller = ref.read(
-                            cardsControllerProvider.notifier,
-                          );
-                          final ok = await controller.toggleFreeze(card.id);
-                          if (!context.mounted) return;
-
-                          final state = ref.read(cardsControllerProvider);
-                          final message = switch (state) {
-                            CardSuccess(:final card) =>
-                              card.status == CardStatus.frozen
-                                  ? '${card.label} is now frozen.'
-                                  : '${card.label} is now active.',
-                            CardError(:final message) => message,
-                            _ => 'Something went wrong.',
-                          };
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(message),
-                              // The frost takes a beat to settle, so the
-                              // confirmation waits rather than covering it.
-                              duration: ok
-                                  ? const Duration(seconds: 2)
-                                  : const Duration(seconds: 4),
-                            ),
-                          );
-                        },
+                        // Any freeze in flight, not just this card's: swiping to
+                        // a neighbour mid write must not leave a live looking
+                        // control that does nothing.
+                        pending: _requestedId != null,
+                        onTap: () => _toggleFreeze(card),
                       ),
                     ),
                   ),
@@ -273,35 +345,96 @@ class _CardAction extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onTap,
+    this.pending = false,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
 
+  /// True while this action's write is out. The tile goes quiet and stops taking
+  /// taps, so a second one cannot queue behind the first. The card itself is
+  /// carrying the pending state, which is why there is no spinner here.
+  final bool pending;
+
   @override
   Widget build(BuildContext context) {
     final tokens = context.tokens;
-    return Pressable(
-      onTap: onTap,
-      semanticLabel: label,
-      borderRadius: AppRadius.lg,
-      child: SoftCard(
-        padding: const EdgeInsets.symmetric(vertical: Space.x4),
-        child: Column(
-          children: [
-            Icon(icon, size: 20, color: tokens.accent),
-            const SizedBox(height: Space.x2),
-            Text(
-              label,
-              style: AppType.labelSmall.copyWith(color: tokens.textPrimary),
-              maxLines: 1,
-            ),
-          ],
+
+    return AnimatedOpacity(
+      opacity: pending ? 0.55 : 1,
+      duration: Motion.resolve(context, Motion.short),
+      curve: Motion.standard,
+      child: Pressable(
+        onTap: pending ? null : onTap,
+        semanticLabel: label,
+        borderRadius: AppRadius.lg,
+        child: SoftCard(
+          padding: const EdgeInsets.symmetric(vertical: Space.x4),
+          child: Column(
+            children: [
+              // State transition: an action that has just changed what it does
+              // turns over. Keyed on what is shown, so the two tiles whose icon
+              // and label never change never run a transition.
+              _ActionTurn(
+                child: Icon(
+                  icon,
+                  key: ValueKey(icon),
+                  size: 20,
+                  color: tokens.accent,
+                ),
+              ),
+              const SizedBox(height: Space.x2),
+              _ActionTurn(
+                child: Text(
+                  label,
+                  key: ValueKey(label),
+                  style: AppType.labelSmall.copyWith(color: tokens.textPrimary),
+                  maxLines: 1,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
+}
+
+/// Swaps one piece of an action tile for another.
+///
+/// The outgoing piece drops and fades while the incoming one rises into its
+/// place, so a control that has just changed what it does says so instead of
+/// cutting to its new label between frames. Both are in the tree mid swap and the
+/// stack takes the larger, which changes nothing here: an icon is swapped for one
+/// the same size, and a single line label for another inside a tile whose width
+/// its own flex already fixed.
+class _ActionTurn extends StatelessWidget {
+  const _ActionTurn({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => AnimatedSwitcher(
+    duration: Motion.resolve(context, Motion.short),
+    switchInCurve: Motion.standard,
+    switchOutCurve: Motion.standard,
+    layoutBuilder: (currentChild, previousChildren) => Stack(
+      alignment: Alignment.center,
+      children: [...previousChildren, ?currentChild],
+    ),
+    transitionBuilder: (child, animation) => FadeTransition(
+      opacity: animation,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 0.35),
+          end: Offset.zero,
+        ).animate(animation),
+        child: child,
+      ),
+    ),
+    child: child,
+  );
 }
 
 /// Shape matched placeholder, so nothing moves when the deck arrives.

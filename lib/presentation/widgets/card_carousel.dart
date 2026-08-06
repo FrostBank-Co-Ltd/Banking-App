@@ -24,6 +24,7 @@ class CardCarousel extends StatefulWidget {
     this.onCardTap,
     this.initialIndex = 0,
     this.showDots = true,
+    this.pendingCardId,
     this.dotColor,
     this.dotTrackColor,
     super.key,
@@ -41,6 +42,11 @@ class CardCarousel extends StatefulWidget {
 
   final int initialIndex;
   final bool showDots;
+
+  /// The card with a freeze or a thaw in flight, if any. Its face acknowledges
+  /// the tap while the write is out, so the wait is not dead time.
+  final String? pendingCardId;
+
   final Color? dotColor;
   final Color? dotTrackColor;
 
@@ -160,7 +166,12 @@ class _CardCarouselState extends State<CardCarousel> {
                             '${card.label}, ${card.kind.label} '
                             '${card.network.label} ending ${card.last4}, '
                             '${card.status.label}',
-                        child: _SheenCard(page: _page, index: index, card: card),
+                        child: _SheenCard(
+                          page: _page,
+                          index: index,
+                          card: card,
+                          pending: card.id == widget.pendingCardId,
+                        ),
                       ),
                     ),
                   ),
@@ -245,11 +256,13 @@ class _SheenCard extends StatelessWidget {
     required this.page,
     required this.index,
     required this.card,
+    required this.pending,
   });
 
   final ValueNotifier<double> page;
   final int index;
   final BankCard card;
+  final bool pending;
 
   @override
   Widget build(BuildContext context) => ValueListenableBuilder<double>(
@@ -260,6 +273,7 @@ class _SheenCard extends StatelessWidget {
         card: card,
         sheen: Motion.amount(context, delta),
         lift: (1 - delta.abs() * 0.6).clamp(0.25, 1.0),
+        pending: pending,
       );
     },
   );

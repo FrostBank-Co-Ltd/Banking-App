@@ -54,11 +54,7 @@ class SupabaseMappers {
         map['network'] as String,
         CardNetwork.visa,
       ),
-      kind: _parseEnum(
-        CardKind.values,
-        map['kind'] as String,
-        CardKind.debit,
-      ),
+      kind: _parseEnum(CardKind.values, map['kind'] as String, CardKind.debit),
       status: _parseEnum(
         CardStatus.values,
         map['status'] as String,
@@ -119,7 +115,9 @@ class SupabaseMappers {
     );
   }
 
-  static SplitBillParticipant splitParticipantFromMap(Map<String, dynamic> map) {
+  static SplitBillParticipant splitParticipantFromMap(
+    Map<String, dynamic> map,
+  ) {
     return SplitBillParticipant(
       id: map['id'] as String,
       name: map['name'] as String,
@@ -129,7 +127,9 @@ class SupabaseMappers {
         map['status'] as String,
         SplitParticipantStatus.pending,
       ),
-      paidAt: map['paid_at'] != null ? DateTime.parse(map['paid_at'] as String) : null,
+      paidAt: map['paid_at'] != null
+          ? DateTime.parse(map['paid_at'] as String)
+          : null,
     );
   }
 
@@ -151,7 +151,7 @@ class SupabaseMappers {
 
 class SupabaseAccountRepository implements AccountRepository {
   SupabaseAccountRepository([SupabaseClient? client])
-      : _client = client ?? SupabaseConfig.client;
+    : _client = client ?? SupabaseConfig.client;
 
   final SupabaseClient _client;
 
@@ -160,10 +160,15 @@ class SupabaseAccountRepository implements AccountRepository {
     try {
       final user = _client.auth.currentUser;
       final userId = user?.id ?? MockSeed.customerId;
-      final response =
-          await _client.from('accounts').select().eq('user_id', userId);
+      final response = await _client
+          .from('accounts')
+          .select()
+          .eq('user_id', userId);
       final list = (response as List)
-          .map((item) => SupabaseMappers.accountFromMap(item as Map<String, dynamic>))
+          .map(
+            (item) =>
+                SupabaseMappers.accountFromMap(item as Map<String, dynamic>),
+          )
           .toList();
       return list;
     } catch (e) {
@@ -174,8 +179,11 @@ class SupabaseAccountRepository implements AccountRepository {
   @override
   Future<Account> fetchAccount(String id) async {
     try {
-      final response =
-          await _client.from('accounts').select().eq('id', id).maybeSingle();
+      final response = await _client
+          .from('accounts')
+          .select()
+          .eq('id', id)
+          .maybeSingle();
       if (response != null) {
         return SupabaseMappers.accountFromMap(response);
       }
@@ -196,10 +204,10 @@ class SupabaseAccountRepository implements AccountRepository {
       final newTotal = current.totalBalance + amount;
       final newAvail = current.availableBalance + amount;
 
-      await _client.from('accounts').update({
-        'total_balance': newTotal,
-        'available_balance': newAvail,
-      }).eq('id', accountId);
+      await _client
+          .from('accounts')
+          .update({'total_balance': newTotal, 'available_balance': newAvail})
+          .eq('id', accountId);
 
       final txnId = 'txn_${DateTime.now().millisecondsSinceEpoch}';
       final refCode =
@@ -255,10 +263,10 @@ class SupabaseAccountRepository implements AccountRepository {
       final newAvail = source.availableBalance - amount;
 
       // Update source account
-      await _client.from('accounts').update({
-        'total_balance': newTotal,
-        'available_balance': newAvail,
-      }).eq('id', fromAccountId);
+      await _client
+          .from('accounts')
+          .update({'total_balance': newTotal, 'available_balance': newAvail})
+          .eq('id', fromAccountId);
 
       // Insert outflow transaction
       final txnId = 'txn_${DateTime.now().millisecondsSinceEpoch}';
@@ -284,23 +292,33 @@ class SupabaseAccountRepository implements AccountRepository {
       try {
         final accountsRes = await _client.from('accounts').select();
         final allAccounts = (accountsRes as List)
-            .map((item) => SupabaseMappers.accountFromMap(item as Map<String, dynamic>))
+            .map(
+              (item) =>
+                  SupabaseMappers.accountFromMap(item as Map<String, dynamic>),
+            )
             .toList();
 
-        final recipientAccount = allAccounts.where((acc) =>
-            acc.id == recipient ||
-            acc.name.toLowerCase() == recipient.toLowerCase() ||
-            acc.shortCode.toLowerCase() == recipient.toLowerCase() ||
-            acc.maskedNumber == recipient).firstOrNull;
+        final recipientAccount = allAccounts
+            .where(
+              (acc) =>
+                  acc.id == recipient ||
+                  acc.name.toLowerCase() == recipient.toLowerCase() ||
+                  acc.shortCode.toLowerCase() == recipient.toLowerCase() ||
+                  acc.maskedNumber == recipient,
+            )
+            .firstOrNull;
 
         if (recipientAccount != null && recipientAccount.id != fromAccountId) {
           final targetNewTotal = recipientAccount.totalBalance + amount;
           final targetNewAvail = recipientAccount.availableBalance + amount;
 
-          await _client.from('accounts').update({
-            'total_balance': targetNewTotal,
-            'available_balance': targetNewAvail,
-          }).eq('id', recipientAccount.id);
+          await _client
+              .from('accounts')
+              .update({
+                'total_balance': targetNewTotal,
+                'available_balance': targetNewAvail,
+              })
+              .eq('id', recipientAccount.id);
 
           await _client.from('transactions').insert({
             'id': 'txn_${DateTime.now().millisecondsSinceEpoch + 1}',
@@ -314,7 +332,8 @@ class SupabaseAccountRepository implements AccountRepository {
             'type': 'transfer',
             'status': 'completed',
             'date': DateTime.now().toIso8601String(),
-            'reference': 'NM-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
+            'reference':
+                'NM-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
             'note': note,
           });
         }
@@ -343,7 +362,7 @@ class SupabaseAccountRepository implements AccountRepository {
 
 class SupabaseCardRepository implements CardRepository {
   SupabaseCardRepository([SupabaseClient? client])
-      : _client = client ?? SupabaseConfig.client;
+    : _client = client ?? SupabaseConfig.client;
 
   final SupabaseClient _client;
 
@@ -352,10 +371,26 @@ class SupabaseCardRepository implements CardRepository {
     try {
       final user = _client.auth.currentUser;
       final userId = user?.id ?? MockSeed.customerId;
-      final response =
-          await _client.from('cards').select().eq('user_id', userId);
+      // Ordered, and this is not cosmetic. Postgres makes no promise about the
+      // order of rows without an ORDER BY, and an update rewrites the row, so
+      // freezing a card was enough to move it in the result set: the deck kept
+      // the page the holder was on, that page now held a different card, and the
+      // card that had just been frozen turned up somewhere else in the deck.
+      //
+      // By id rather than by anything meaningful because the table has no issued
+      // at column to sort on. Arbitrary but fixed is all this needs to be: what
+      // breaks the deck is the order changing under it, not the order itself.
+      final response = await _client
+          .from('cards')
+          .select()
+          .eq('user_id', userId)
+          // Spelled out. The Dart client defaults this to descending, unlike the
+          // JavaScript one, so leaving it off reads as ascending and is not.
+          .order('id', ascending: true);
       final list = (response as List)
-          .map((item) => SupabaseMappers.cardFromMap(item as Map<String, dynamic>))
+          .map(
+            (item) => SupabaseMappers.cardFromMap(item as Map<String, dynamic>),
+          )
           .toList();
       return list;
     } catch (e) {
@@ -366,8 +401,11 @@ class SupabaseCardRepository implements CardRepository {
   @override
   Future<BankCard> fetchCard(String id) async {
     try {
-      final response =
-          await _client.from('cards').select().eq('id', id).maybeSingle();
+      final response = await _client
+          .from('cards')
+          .select()
+          .eq('id', id)
+          .maybeSingle();
       if (response != null) {
         return SupabaseMappers.cardFromMap(response);
       }
@@ -424,14 +462,13 @@ class SupabaseCardRepository implements CardRepository {
   Future<BankCard> toggleCardFreeze(String cardId) async {
     try {
       final card = await fetchCard(cardId);
-      final newStatus =
-          card.status == CardStatus.active ? 'frozen' : 'active';
+      final newStatus = card.status == CardStatus.active ? 'frozen' : 'active';
       await _client
           .from('cards')
-          .update({'status': newStatus}).eq('id', cardId);
+          .update({'status': newStatus})
+          .eq('id', cardId);
       return card.copyWith(
-        status:
-            newStatus == 'frozen' ? CardStatus.frozen : CardStatus.active,
+        status: newStatus == 'frozen' ? CardStatus.frozen : CardStatus.active,
       );
     } catch (e) {
       if (e is RepositoryFailure) rethrow;
@@ -445,7 +482,8 @@ class SupabaseCardRepository implements CardRepository {
       final card = await fetchCard(cardId);
       await _client
           .from('cards')
-          .update({'spending_limit': limit}).eq('id', cardId);
+          .update({'spending_limit': limit})
+          .eq('id', cardId);
       return card.copyWith(spendingLimit: limit);
     } catch (e) {
       if (e is RepositoryFailure) rethrow;
@@ -456,7 +494,7 @@ class SupabaseCardRepository implements CardRepository {
 
 class SupabaseTransactionRepository implements TransactionRepository {
   SupabaseTransactionRepository([SupabaseClient? client])
-      : _client = client ?? SupabaseConfig.client;
+    : _client = client ?? SupabaseConfig.client;
 
   final SupabaseClient _client;
 
@@ -473,7 +511,11 @@ class SupabaseTransactionRepository implements TransactionRepository {
       }
       final response = await query.order('date', ascending: false);
       final list = (response as List)
-          .map((item) => SupabaseMappers.transactionFromMap(item as Map<String, dynamic>))
+          .map(
+            (item) => SupabaseMappers.transactionFromMap(
+              item as Map<String, dynamic>,
+            ),
+          )
           .toList();
       return list;
     } catch (e) {
@@ -484,8 +526,11 @@ class SupabaseTransactionRepository implements TransactionRepository {
   @override
   Future<Txn> fetchTransaction(String id) async {
     try {
-      final response =
-          await _client.from('transactions').select().eq('id', id).maybeSingle();
+      final response = await _client
+          .from('transactions')
+          .select()
+          .eq('id', id)
+          .maybeSingle();
       if (response != null) {
         return SupabaseMappers.transactionFromMap(response);
       }
@@ -499,7 +544,7 @@ class SupabaseTransactionRepository implements TransactionRepository {
 
 class SupabasePromoRepository implements PromoRepository {
   SupabasePromoRepository([SupabaseClient? client])
-      : _client = client ?? SupabaseConfig.client;
+    : _client = client ?? SupabaseConfig.client;
 
   final SupabaseClient _client;
 
@@ -508,7 +553,10 @@ class SupabasePromoRepository implements PromoRepository {
     try {
       final response = await _client.from('promos').select();
       final list = (response as List)
-          .map((item) => SupabaseMappers.promoFromMap(item as Map<String, dynamic>))
+          .map(
+            (item) =>
+                SupabaseMappers.promoFromMap(item as Map<String, dynamic>),
+          )
           .toList();
       return list;
     } catch (e) {
@@ -519,7 +567,7 @@ class SupabasePromoRepository implements PromoRepository {
 
 class SupabaseProfileRepository implements ProfileRepository {
   SupabaseProfileRepository([SupabaseClient? client])
-      : _client = client ?? SupabaseConfig.client;
+    : _client = client ?? SupabaseConfig.client;
 
   final SupabaseClient _client;
 
@@ -538,8 +586,11 @@ class SupabaseProfileRepository implements ProfileRepository {
         }
       }
 
-      final firstProfile =
-          await _client.from('profiles').select().limit(1).maybeSingle();
+      final firstProfile = await _client
+          .from('profiles')
+          .select()
+          .limit(1)
+          .maybeSingle();
       if (firstProfile != null) {
         return SupabaseMappers.profileFromMap(firstProfile);
       }
@@ -606,7 +657,7 @@ extension _GoalSaveMappers on SupabaseMappers {
 
 class SupabaseSavingsGoalRepository implements SavingsGoalRepository {
   SupabaseSavingsGoalRepository([SupabaseClient? client])
-      : _client = client ?? SupabaseConfig.client;
+    : _client = client ?? SupabaseConfig.client;
 
   final SupabaseClient _client;
 
@@ -625,13 +676,19 @@ class SupabaseSavingsGoalRepository implements SavingsGoalRepository {
       if (response != null) {
         final currentAvail = (response['available_balance'] as num).toDouble();
         final currentTotal = (response['total_balance'] as num).toDouble();
-        final newAvail = (currentAvail + amountChange).clamp(0.0, double.infinity);
-        final newTotal = (currentTotal + amountChange).clamp(0.0, double.infinity);
+        final newAvail = (currentAvail + amountChange).clamp(
+          0.0,
+          double.infinity,
+        );
+        final newTotal = (currentTotal + amountChange).clamp(
+          0.0,
+          double.infinity,
+        );
 
-        await _client.from('accounts').update({
-          'available_balance': newAvail,
-          'total_balance': newTotal,
-        }).eq('id', accountId);
+        await _client
+            .from('accounts')
+            .update({'available_balance': newAvail, 'total_balance': newTotal})
+            .eq('id', accountId);
 
         await _client.from('transactions').insert({
           'id': 'txn_${DateTime.now().millisecondsSinceEpoch}',
@@ -645,7 +702,8 @@ class SupabaseSavingsGoalRepository implements SavingsGoalRepository {
           'type': 'transfer',
           'status': 'completed',
           'date': DateTime.now().toIso8601String(),
-          'reference': 'NM-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
+          'reference':
+              'NM-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
           'note': note,
         });
       }
@@ -663,8 +721,10 @@ class SupabaseSavingsGoalRepository implements SavingsGoalRepository {
           .eq('user_id', userId)
           .order('created_at', ascending: false);
       final list = (response as List)
-          .map((item) =>
-              _GoalSaveMappers.goalFromMap(item as Map<String, dynamic>))
+          .map(
+            (item) =>
+                _GoalSaveMappers.goalFromMap(item as Map<String, dynamic>),
+          )
           .toList();
       return list;
     } catch (e) {
@@ -748,9 +808,10 @@ class SupabaseSavingsGoalRepository implements SavingsGoalRepository {
       final current = await fetchGoal(goalId);
       final newBalance = current.balance + amount;
 
-      await _client.from('goal_saves').update({
-        'balance': newBalance,
-      }).eq('id', goalId);
+      await _client
+          .from('goal_saves')
+          .update({'balance': newBalance})
+          .eq('id', goalId);
 
       await _client.from('goal_transactions').insert({
         'id': 'gtxn_${DateTime.now().millisecondsSinceEpoch}',
@@ -789,9 +850,10 @@ class SupabaseSavingsGoalRepository implements SavingsGoalRepository {
       }
       final newBalance = current.balance - amount;
 
-      await _client.from('goal_saves').update({
-        'balance': newBalance,
-      }).eq('id', goalId);
+      await _client
+          .from('goal_saves')
+          .update({'balance': newBalance})
+          .eq('id', goalId);
 
       await _client.from('goal_transactions').insert({
         'id': 'gtxn_${DateTime.now().millisecondsSinceEpoch}',
@@ -822,10 +884,10 @@ class SupabaseSavingsGoalRepository implements SavingsGoalRepository {
   Future<GoalSave> closeGoal(String id) async {
     try {
       final current = await fetchGoal(id);
-      await _client.from('goal_saves').update({
-        'status': 'closed',
-        'balance': 0.0,
-      }).eq('id', id);
+      await _client
+          .from('goal_saves')
+          .update({'status': 'closed', 'balance': 0.0})
+          .eq('id', id);
 
       if (current.balance > 0) {
         await _adjustAccountBalance(
@@ -836,10 +898,7 @@ class SupabaseSavingsGoalRepository implements SavingsGoalRepository {
         );
       }
 
-      return current.copyWith(
-        status: GoalSaveStatus.closed,
-        balance: 0.0,
-      );
+      return current.copyWith(status: GoalSaveStatus.closed, balance: 0.0);
     } catch (e) {
       if (e is RepositoryFailure) rethrow;
       throw RepositoryFailure('Could not close goal: $e');
@@ -855,8 +914,10 @@ class SupabaseSavingsGoalRepository implements SavingsGoalRepository {
           .eq('goal_id', goalId)
           .order('date', ascending: false);
       final list = (response as List)
-          .map((item) =>
-              _GoalSaveMappers.goalTxnFromMap(item as Map<String, dynamic>))
+          .map(
+            (item) =>
+                _GoalSaveMappers.goalTxnFromMap(item as Map<String, dynamic>),
+          )
           .toList();
       return list;
     } catch (e) {
@@ -867,7 +928,7 @@ class SupabaseSavingsGoalRepository implements SavingsGoalRepository {
 
 class SupabaseSplitBillRepository implements SplitBillRepository {
   SupabaseSplitBillRepository([SupabaseClient? client])
-      : _client = client ?? SupabaseConfig.client;
+    : _client = client ?? SupabaseConfig.client;
 
   final SupabaseClient _client;
 
@@ -895,7 +956,11 @@ class SupabaseSplitBillRepository implements SplitBillRepository {
             .eq('bill_id', billId);
 
         final participants = (partsRes as List)
-            .map((p) => SupabaseMappers.splitParticipantFromMap(p as Map<String, dynamic>))
+            .map(
+              (p) => SupabaseMappers.splitParticipantFromMap(
+                p as Map<String, dynamic>,
+              ),
+            )
             .toList();
 
         results.add(SupabaseMappers.splitBillFromMap(billMap, participants));
@@ -922,7 +987,11 @@ class SupabaseSplitBillRepository implements SplitBillRepository {
           .eq('bill_id', id);
 
       final participants = (partsRes as List)
-          .map((p) => SupabaseMappers.splitParticipantFromMap(p as Map<String, dynamic>))
+          .map(
+            (p) => SupabaseMappers.splitParticipantFromMap(
+              p as Map<String, dynamic>,
+            ),
+          )
           .toList();
 
       return SupabaseMappers.splitBillFromMap(billRes, participants);
@@ -1014,10 +1083,10 @@ class SupabaseSplitBillRepository implements SplitBillRepository {
       if (participant.isPaid) return true;
 
       final now = DateTime.now();
-      await _client.from('split_bill_participants').update({
-        'status': 'paid',
-        'paid_at': now.toIso8601String(),
-      }).eq('id', participantId);
+      await _client
+          .from('split_bill_participants')
+          .update({'status': 'paid', 'paid_at': now.toIso8601String()})
+          .eq('id', participantId);
 
       final accountId = payingAccountId ?? 'acc_wallet';
 
@@ -1029,15 +1098,22 @@ class SupabaseSplitBillRepository implements SplitBillRepository {
           .maybeSingle();
 
       if (accountRes != null) {
-        final currentAvail = (accountRes['available_balance'] as num).toDouble();
+        final currentAvail = (accountRes['available_balance'] as num)
+            .toDouble();
         final currentTotal = (accountRes['total_balance'] as num).toDouble();
-        final newAvail = (currentAvail - participant.shareAmount).clamp(0.0, double.infinity);
-        final newTotal = (currentTotal - participant.shareAmount).clamp(0.0, double.infinity);
+        final newAvail = (currentAvail - participant.shareAmount).clamp(
+          0.0,
+          double.infinity,
+        );
+        final newTotal = (currentTotal - participant.shareAmount).clamp(
+          0.0,
+          double.infinity,
+        );
 
-        await _client.from('accounts').update({
-          'available_balance': newAvail,
-          'total_balance': newTotal,
-        }).eq('id', accountId);
+        await _client
+            .from('accounts')
+            .update({'available_balance': newAvail, 'total_balance': newTotal})
+            .eq('id', accountId);
 
         // Insert transaction log
         final txnId = 'txn_split_${now.millisecondsSinceEpoch}';
@@ -1105,7 +1181,7 @@ class SupabaseSplitBillRepository implements SplitBillRepository {
 
 class SupabaseAuthRepository implements AuthRepository {
   SupabaseAuthRepository([SupabaseClient? client])
-      : _client = client ?? SupabaseConfig.client;
+    : _client = client ?? SupabaseConfig.client;
 
   final SupabaseClient _client;
 
@@ -1184,8 +1260,10 @@ class SupabaseAuthRepository implements AuthRepository {
       await _client.from('profiles').upsert(profileMap);
 
       try {
-        final existingAccounts =
-            await _client.from('accounts').select().limit(1);
+        final existingAccounts = await _client
+            .from('accounts')
+            .select()
+            .limit(1);
         if ((existingAccounts as List).isEmpty) {
           final defaultWallet = {
             'id': 'acc_wallet_$userId',

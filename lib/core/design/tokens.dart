@@ -15,7 +15,10 @@ abstract final class Palette {
   // Gradients
   static const List<Color> gradientPrimary = [deepNavy, primaryBlue];
   static const List<Color> gradientSecondary = [primaryPurple, skyBlue];
-  static const List<Color> gradientCard = [Color(0xFF1E1B4B), Color(0xFF00D4FF)];
+  static const List<Color> gradientCard = [
+    Color(0xFF1E1B4B),
+    Color(0xFF00D4FF),
+  ];
 
   // Neutral
   static const Color textPrimary = Color(0xFF0F1123);
@@ -60,16 +63,35 @@ abstract final class Palette {
     cardVoid,
   ];
 
-  /// Stops for [gradientCardFace]. Front loaded, so colour lives in the top
+  /// Stops for every card face fall. Front loaded, so colour lives in the top
   /// third and the mark reads white against near black below it.
-  static const List<double> cardFaceStops = [
-    0,
-    0.08,
-    0.2,
-    0.29,
-    0.41,
-    0.58,
-    1,
+  ///
+  /// Shared by all three falls: the structure is what makes the portfolio one
+  /// family, and only the hue of the band tells one product from another.
+  static const List<double> cardFaceStops = [0, 0.08, 0.2, 0.29, 0.41, 0.58, 1];
+
+  /// Second card product. The same fall carried by the violet end of the brand
+  /// sheet, so two cards in a wallet are not the same object twice.
+  static const List<Color> gradientCardAurora = [
+    skyBlue,
+    frostPeriwinkle,
+    frostViolet,
+    frostPurple,
+    primaryPurple,
+    cardNight,
+    cardVoid,
+  ];
+
+  /// Third card product. The same fall in the brand's own blue rather than the
+  /// cyan of [gradientCardFace], which reads as a different card beside it.
+  static const List<Color> gradientCardMeridian = [
+    frostIcePale,
+    skyBlue,
+    frostIceBlue,
+    primaryBlue,
+    deepNavy,
+    cardNight,
+    cardVoid,
   ];
 
   // FrostBank brand surface, transcribed from the brand mark artwork. These
@@ -298,7 +320,11 @@ class AppTokens extends ThemeExtension<AppTokens> {
         other.interactivePrimary,
         t,
       )!,
-      interactiveHover: Color.lerp(interactiveHover, other.interactiveHover, t)!,
+      interactiveHover: Color.lerp(
+        interactiveHover,
+        other.interactiveHover,
+        t,
+      )!,
       interactiveActive: Color.lerp(
         interactiveActive,
         other.interactiveActive,
