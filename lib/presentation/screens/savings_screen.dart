@@ -25,70 +25,96 @@ class SavingsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Savings')),
       body: ResponsiveShell(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(
-            Space.x5,
-            Space.x2,
-            Space.x5,
-            Space.x16 + Space.x8,
-          ),
+        child: Stack(
           children: [
-            // ── Hero card ──────────────────────────────────────────────────
-            _SavingsHeroCard(totalSavings: totalSavings),
-            const SizedBox(height: Space.x6),
-
-            // ── Section header + open-goal button ──────────────────────────
-            SectionHeader(
-              title: 'Goal Saves',
-              action: TextButton.icon(
-                onPressed: () => _openGoalSheet(context, ref),
-                icon: const Icon(Icons.add_rounded, size: 18),
-                label: const Text('New goal'),
+            ListView(
+              padding: const EdgeInsets.fromLTRB(
+                0,
+                0,
+                0,
+                Space.x16 + Space.x8,
               ),
-            ),
+              children: [
+                // ── Hero card (edge-to-edge like crypto) ──────────────────────
+                _SavingsHeroCard(totalSavings: totalSavings),
+                const SizedBox(height: Space.x6),
 
-            // ── Goal list ──────────────────────────────────────────────────
-            AsyncSection<List<GoalSave>>(
-              value: goals,
-              onRetry: () => ref.invalidate(goalsProvider),
-              skeleton: const SkeletonRows(count: 3),
-              isEmpty: (rows) =>
-                  rows.where((g) => g.status == GoalSaveStatus.active).isEmpty,
-              empty: EmptyStateView(
-                icon: Icons.savings_rounded,
-                heading: 'No goal saves yet',
-                message:
-                    'Open a goal save to start growing your money with daily interest.',
-                actionLabel: 'Open a goal save',
-                onAction: () => _openGoalSheet(context, ref),
-              ),
-              builder: (rows) {
-                final active =
-                    rows.where((g) => g.status == GoalSaveStatus.active).toList();
-                return Column(
-                  children: [
-                    for (final goal in active)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: Space.x3),
-                        child: _GoalTile(goal: goal),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: Space.x5),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // ── Section header + open-goal button ──────────────────
+                      SectionHeader(
+                        title: 'Goal Saves',
+                        action: TextButton.icon(
+                          onPressed: () => _openGoalSheet(context, ref),
+                          icon: const Icon(Icons.add_rounded, size: 18),
+                          label: const Text('New goal'),
+                        ),
                       ),
-                  ],
-                );
-              },
+
+                      // ── Goal list ──────────────────────────────────────────
+                      AsyncSection<List<GoalSave>>(
+                        value: goals,
+                        onRetry: () => ref.invalidate(goalsProvider),
+                        skeleton: const SkeletonRows(count: 3),
+                        isEmpty: (rows) => rows
+                            .where((g) => g.status == GoalSaveStatus.active)
+                            .isEmpty,
+                        empty: EmptyStateView(
+                          icon: Icons.savings_rounded,
+                          heading: 'No goal saves yet',
+                          message:
+                              'Open a goal save to start growing your money with daily interest.',
+                          actionLabel: 'Open a goal save',
+                          onAction: () => _openGoalSheet(context, ref),
+                        ),
+                        builder: (rows) {
+                          final active = rows
+                              .where((g) => g.status == GoalSaveStatus.active)
+                              .toList();
+                          return Column(
+                            children: [
+                              for (final goal in active)
+                                Padding(
+                                  padding:
+                                      const EdgeInsets.only(bottom: Space.x3),
+                                  child: _GoalTile(goal: goal),
+                                ),
+                            ],
+                          );
+                        },
+                      ),
+
+                      // ── Interest info blurb ────────────────────────────────
+                      const SizedBox(height: Space.x4),
+                      _InterestInfoCard(),
+                    ],
+                  ),
+                ),
+              ],
             ),
 
-            // ── Interest info blurb ────────────────────────────────────────
-            const SizedBox(height: Space.x4),
-            _InterestInfoCard(),
+            // ── FAB constrained within responsive shell ───────────────────────
+            Positioned(
+              bottom: Space.x5,
+              left: 0,
+              right: 0,
+              child: Align(
+                alignment: Alignment.bottomRight,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: Space.x5),
+                  child: FloatingActionButton.extended(
+                    onPressed: () => _openGoalSheet(context, ref),
+                    icon: const Icon(Icons.savings_rounded),
+                    label: const Text('Open goal save'),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
-      ),
-
-      // ── FAB ───────────────────────────────────────────────────────────────
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openGoalSheet(context, ref),
-        icon: const Icon(Icons.savings_rounded),
-        label: const Text('Open goal save'),
       ),
     );
   }
@@ -114,30 +140,27 @@ class _SavingsHeroCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return FrostBackdrop(
-      borderRadius: AppRadius.all(AppRadius.lg),
-      glow: 0.9,
+      borderRadius: const BorderRadius.vertical(
+        bottom: Radius.circular(AppRadius.xl),
+      ),
+      glow: 0.34,
       child: Padding(
-        padding: const EdgeInsets.all(Space.x5),
+        padding: const EdgeInsets.fromLTRB(
+          Space.x5,
+          Space.x5,
+          Space.x5,
+          Space.x7,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.savings_rounded,
-                  color: Colors.white.withValues(alpha: 0.8),
-                  size: 18,
-                ),
-                const SizedBox(width: Space.x2),
-                Text(
-                  'Total current savings',
-                  style: AppType.labelMedium.copyWith(
-                    color: Colors.white.withValues(alpha: 0.8),
-                  ),
-                ),
-              ],
+            Text(
+              'Total current savings',
+              style: AppType.labelMedium.copyWith(
+                color: Colors.white.withValues(alpha: 0.76),
+              ),
             ),
-            const SizedBox(height: Space.x3),
+            const SizedBox(height: Space.x2),
             totalSavings.when(
               loading: () => const SkeletonBlock(
                 width: 160,
@@ -146,42 +169,62 @@ class _SavingsHeroCard extends ConsumerWidget {
               ),
               error: (_, _) => Text(
                 '—',
-                style: AppType.numericLarge.copyWith(color: Colors.white),
+                style: AppType.numericHero.copyWith(color: Colors.white),
               ),
               data: (amount) => MoneyText(
                 amount,
-                style: AppType.numericLarge,
+                style: AppType.numericHero,
                 color: Colors.white,
                 label: 'Total current savings',
               ),
             ),
-            const SizedBox(height: Space.x4),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: Space.x3,
-                vertical: Space.x2,
-              ),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.15),
-                borderRadius: AppRadius.all(AppRadius.pill),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.25),
+            const SizedBox(height: Space.x3),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: Space.x3,
+                    vertical: Space.x2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: AppRadius.all(AppRadius.pill),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.trending_up_rounded,
+                        color: Colors.white.withValues(alpha: 0.95),
+                        size: 14,
+                      ),
+                      const SizedBox(width: Space.x1 + 2),
+                      Text(
+                        '0.011918% daily interest',
+                        style: AppType.labelSmall.copyWith(
+                          color: Colors.white.withValues(alpha: 0.95),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.trending_up_rounded,
-                    color: Colors.white,
-                    size: 14,
+                const SizedBox(width: Space.x3),
+                Text(
+                  'today',
+                  style: AppType.bodySmall.copyWith(
+                    color: Colors.white.withValues(alpha: 0.7),
                   ),
-                  const SizedBox(width: Space.x1),
-                  Text(
-                    '4.35% APY · 0.011918% daily',
-                    style: AppType.labelSmall.copyWith(color: Colors.white),
-                  ),
-                ],
+                ),
+              ],
+            ),
+            const SizedBox(height: Space.x4),
+            Text(
+              'Goal saves are mock ledger data. Interest rates are indicative.',
+              style: AppType.bodySmall.copyWith(
+                color: Colors.white.withValues(alpha: 0.6),
               ),
             ),
           ],
