@@ -16,6 +16,7 @@ import 'screens/currency_selection_screen.dart';
 import 'screens/create_split_bill_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/not_in_build_screen.dart';
+import 'screens/opening_ad_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/qr_scanner_screen.dart';
 import 'screens/register_screen.dart';
@@ -57,7 +58,9 @@ final routerProvider = Provider<GoRouter>((ref) {
         SessionSignedOut() =>
           unauthenticated.contains(location) ? null : '/login',
         SessionSignedIn() =>
-          unauthenticated.contains(location) || location == '/splash'
+          unauthenticated.contains(location) ||
+                  location == '/splash' ||
+                  location == '/ad'
               ? '/'
               : null,
       };
@@ -66,6 +69,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         RouteErrorScreen(location: state.uri.toString()),
     routes: [
       GoRoute(path: '/splash', builder: (_, _) => const SplashScreen()),
+      GoRoute(path: '/ad', builder: (_, _) => const OpeningAdScreen()),
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
       GoRoute(path: '/register', builder: (_, _) => const RegisterScreen()),
       GoRoute(
@@ -185,6 +189,11 @@ class _SessionRefresh extends ChangeNotifier {
   _SessionRefresh(Ref ref) {
     ref.listen<SessionState>(
       sessionProvider,
+      (_, _) => notifyListeners(),
+      fireImmediately: false,
+    );
+    ref.listen<bool>(
+      openingAdDismissedProvider,
       (_, _) => notifyListeners(),
       fireImmediately: false,
     );

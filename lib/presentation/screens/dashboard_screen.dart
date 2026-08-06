@@ -12,6 +12,7 @@ import '../widgets/brand.dart';
 import '../widgets/card_face.dart';
 import '../widgets/money_text.dart';
 import '../widgets/motion_effects.dart';
+import '../widgets/opening_ad_modal.dart';
 import '../widgets/pressable.dart';
 import '../widgets/states.dart';
 import '../widgets/surfaces.dart';
@@ -27,10 +28,23 @@ const Offset _sectionRise = Offset(0, 22);
 
 /// Authenticated home. Gradient top region over a rounded sheet that carries
 /// quick actions, the Finance Hub, recent activity, and offers.
-class DashboardScreen extends ConsumerWidget {
+class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
-  Future<void> _refresh(WidgetRef ref) async {
+  @override
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) showOpeningAdModal(context, ref);
+    });
+  }
+
+  Future<void> _refresh() async {
     ref.invalidate(accountsProvider);
     ref.invalidate(cardsProvider);
     ref.invalidate(promosProvider);
@@ -39,13 +53,13 @@ class DashboardScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final tokens = context.tokens;
 
     return Scaffold(
       backgroundColor: tokens.backgroundAlt,
       body: RefreshIndicator(
-        onRefresh: () => _refresh(ref),
+        onRefresh: _refresh,
         color: tokens.accent,
         child: ResponsiveShell(
           child: SingleChildScrollView(
