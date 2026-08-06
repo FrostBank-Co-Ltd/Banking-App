@@ -42,13 +42,23 @@ class Pressable extends StatefulWidget {
 
 class _PressableState extends State<Pressable>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _press = AnimationController(
-    vsync: this,
-    duration: Motion.instant,
-    reverseDuration: Motion.short,
-  );
+  // Built in initState rather than as a lazy field. Under reduced motion the
+  // press animation is never read during build, so a lazy field would still be
+  // uninitialised at dispose, and running its initialiser there would ask a
+  // deactivated element for its TickerMode.
+  late final AnimationController _press;
 
   bool _focused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _press = AnimationController(
+      vsync: this,
+      duration: Motion.instant,
+      reverseDuration: Motion.short,
+    );
+  }
 
   @override
   void dispose() {
