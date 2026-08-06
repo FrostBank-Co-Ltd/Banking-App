@@ -110,9 +110,9 @@ class HubScreen extends ConsumerWidget {
                 SizedBox(width: Space.x3),
                 Expanded(
                   child: HubTile(
-                    icon: Icons.schedule_rounded,
-                    label: 'Time Deposit',
-                    route: '/soon/time-deposit',
+                    icon: Icons.directions_run_rounded,
+                    label: 'Netkeiba JRA',
+                    route: '/netkeiba',
                   ),
                 ),
               ],
