@@ -28,41 +28,79 @@ class _DepositScreenState extends ConsumerState<DepositScreen> {
     if (_submitting) return;
 
     final amountText = _amountController.text.trim();
-    final amount = double.tryParse(amountText);
-    if (amount == null || amount <= 0) {
+    final inputAmount = double.tryParse(amountText);
+    
+    if (inputAmount == null || inputAmount <= 0) {
       setState(() => _errorMessage = 'Please enter a valid deposit amount.');
       return;
     }
 
+    // Step 1: Generate Reference Code and show Receipt instead of depositing immediately
+    final refCode = 'DEP-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Deposit Receipt (POC)', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Destination: ${account.name}'),
+            const SizedBox(height: 8),
+            Text('Inputted Amount: ₱${inputAmount.toStringAsFixed(2)}'),
+            const SizedBox(height: 8),
+            Text('Reference Code: $refCode', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const Divider(height: 24),
+            const Text(
+              'To complete this deposit in the real world, input this reference code at a cash machine. \n\nFor this POC, closing this dialog will simulate a machine deposit and add a default of ₱100.00 to your account.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF5F0D96)),
+              onPressed: () async {
+                Navigator.pop(ctx); // Close receipt
+                await _executeDefaultDeposit(account); // Process the actual 100 PHP
+              },
+              child: const Text('Close & Deposit ₱100.00', style: TextStyle(color: Colors.white)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Step 2: The actual Riverpod logic forcing the 100 PHP deposit
+  Future<void> _executeDefaultDeposit(Account account) async {
     setState(() {
       _submitting = true;
       _errorMessage = null;
     });
 
     try {
+      const double hackathonDefaultAmount = 100.0; // Forced rule
       await ref.read(accountRepositoryProvider).deposit(
             accountId: account.id,
-            amount: amount,
+            amount: hackathonDefaultAmount,
           );
 
       ref.invalidate(accountsProvider);
       ref.invalidate(accountProvider(account.id));
       ref.invalidate(transactionsProvider);
-      ref.invalidate(filteredTransactionsProvider);
-      ref.invalidate(monthFlowProvider(account.id));
-
+      
       if (mounted) {
+        Navigator.pop(context); // Return to previous screen
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Successfully deposited \$${amount.toStringAsFixed(2)} to ${account.name}!',
-            ),
-          ),
+          SnackBar(content: Text('Simulated machine deposit of ₱100.00 to ${account.name} successful!')),
         );
-        Navigator.pop(context);
       }
-    } on RepositoryFailure catch (e) {
-      if (mounted) setState(() => _errorMessage = e.message);
     } catch (e) {
       if (mounted) setState(() => _errorMessage = 'Deposit failed: $e');
     } finally {
