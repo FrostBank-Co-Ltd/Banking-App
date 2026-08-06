@@ -1,5 +1,5 @@
-// Throwaway render harness. Renders the shell over a busy backdrop and over the
-// real app background, and writes PNGs so the glass can be looked at.
+// Throwaway render harness. Writes PNGs of the shell so the glass and the home
+// beacon can be looked at.
 // Run: flutter test --update-goldens test/tmp_render_shell_test.dart
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -69,8 +69,6 @@ class _Backdrop extends StatelessWidget {
             fontFamily: 'Geist',
           ),
         ),
-        // Straight stripes land under the bar, so any bending of the backdrop
-        // shows up as a kink in a straight line.
         for (var i = 0; i < 9; i++)
           Container(
             height: 14,
@@ -82,8 +80,7 @@ class _Backdrop extends StatelessWidget {
   );
 }
 
-/// Flat app background with cards running under the bar, which is what the glass
-/// actually has to sit on.
+/// Flat app background with cards running under the bar.
 class _Realistic extends StatelessWidget {
   const _Realistic();
 
@@ -117,7 +114,7 @@ class _Realistic extends StatelessWidget {
   );
 }
 
-GoRouter _router({bool realistic = false, String at = '/cards'}) => GoRouter(
+GoRouter _router({required bool realistic, required String at}) => GoRouter(
   initialLocation: at,
   routes: [
     StatefulShellRoute(
@@ -145,12 +142,15 @@ GoRouter _router({bool realistic = false, String at = '/cards'}) => GoRouter(
 void main() {
   setUpAll(_loadFonts);
 
+  /// The beacon repeats forever, so pumpAndSettle can never be used here. Frames
+  /// are advanced by hand to a chosen point in the cycle instead.
   Future<void> shot(
     WidgetTester tester,
     String name, {
     required ThemeData theme,
-    bool realistic = false,
-    String at = '/cards',
+    required bool realistic,
+    required String at,
+    Duration settle = const Duration(milliseconds: 700),
   }) async {
     tester.view
       ..physicalSize = const ui.Size(1170, 760)
@@ -164,38 +164,69 @@ void main() {
         routerConfig: _router(realistic: realistic, at: at),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump(settle);
 
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('tmp_out/$name.png'),
     );
+
+    // Tears the tree down so the repeating ticker is disposed inside the test.
+    await tester.pumpWidget(const SizedBox.shrink());
   }
 
-  testWidgets('dark over stripes', (tester) async {
-    await shot(tester, 'dark_stripes', theme: AppTheme.dark());
+  testWidgets('dark, cards selected, over stripes', (tester) async {
+    await shot(
+      tester,
+      'dark_stripes',
+      theme: AppTheme.dark(),
+      realistic: false,
+      at: '/cards',
+    );
   });
 
-  testWidgets('dark over the app background', (tester) async {
+  testWidgets('dark, cards selected, over the app background', (tester) async {
     await shot(
       tester,
       'dark_app',
       theme: AppTheme.dark(),
       realistic: true,
+      at: '/cards',
     );
   });
 
-  testWidgets('dark with home selected', (tester) async {
+  testWidgets('home beacon mid sweep', (tester) async {
+    // Cycle is 3400ms, sweep window 0.06 to 0.44, so phase 0.25 is mid band.
     await shot(
       tester,
-      'dark_home',
+      'home_sweep',
       theme: AppTheme.dark(),
       realistic: true,
       at: '/',
+      settle: const Duration(milliseconds: 850),
     );
   });
 
-  testWidgets('light over stripes', (tester) async {
-    await shot(tester, 'light_stripes', theme: AppTheme.light());
+  testWidgets('home beacon glow only', (tester) async {
+    // Phase 0.75 is past the sweep window: breathing glow, no band.
+    await shot(
+      tester,
+      'home_glow',
+      theme: AppTheme.dark(),
+      realistic: true,
+      at: '/',
+      settle: const Duration(milliseconds: 2550),
+    );
+  });
+
+  testWidgets('light, home selected', (tester) async {
+    await shot(
+      tester,
+      'light_home',
+      theme: AppTheme.light(),
+      realistic: false,
+      at: '/',
+      settle: const Duration(milliseconds: 850),
+    );
   });
 }

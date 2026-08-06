@@ -80,6 +80,9 @@ class _GlassNavBar extends StatelessWidget {
                   _SelectionCapsule(
                     slot: ShellDestinations.slotOf(activeBranch),
                     height: _height,
+                    // The dashboard is marked by the brand mark lighting up, so
+                    // the capsule stands down on that slot.
+                    visible: activeBranch != 0,
                   ),
                   Row(
                     children: [
@@ -123,11 +126,20 @@ class _GlassNavBar extends StatelessWidget {
 /// height, both peaking at the halfway point. The position itself overshoots on
 /// [Motion.settle] and comes back, so it arrives under its own weight. Both
 /// effects flatten to nothing under reduced motion, leaving a plain slide.
+/// The capsule still travels to the centre slot when the dashboard is selected,
+/// it just fades out on arrival, because the brand mark takes over as the
+/// indicator there. Keeping the travel and fading the paint means the return trip
+/// starts from the right place instead of appearing out of nowhere.
 class _SelectionCapsule extends StatefulWidget {
-  const _SelectionCapsule({required this.slot, required this.height});
+  const _SelectionCapsule({
+    required this.slot,
+    required this.height,
+    required this.visible,
+  });
 
   final int slot;
   final double height;
+  final bool visible;
 
   @override
   State<_SelectionCapsule> createState() => _SelectionCapsuleState();
@@ -183,18 +195,24 @@ class _SelectionCapsuleState extends State<_SelectionCapsule>
     final glass = Glass.of(context);
     final reducedGlass = Glass.isReduced(context);
 
-    return AnimatedBuilder(
-      animation: _travel,
-      builder: (context, _) => SizedBox.expand(
-        child: CustomPaint(
-          painter: _CapsulePainter(
-            from: _from,
-            to: _to.toDouble(),
-            progress: _travel.value,
-            stretch: Motion.amount(context, 1),
-            fill: glass.indicator,
-            rim: glass.indicatorRim,
-            glow: reducedGlass ? const Color(0x00000000) : glass.indicatorGlow,
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(end: widget.visible ? 1 : 0),
+      duration: Motion.resolve(context, Motion.medium),
+      curve: Motion.standard,
+      builder: (context, fade, _) => AnimatedBuilder(
+        animation: _travel,
+        builder: (context, _) => SizedBox.expand(
+          child: CustomPaint(
+            painter: _CapsulePainter(
+              from: _from,
+              to: _to.toDouble(),
+              progress: _travel.value,
+              opacity: fade,
+              stretch: Motion.amount(context, 1),
+              fill: glass.indicator,
+              rim: glass.indicatorRim,
+              glow: reducedGlass ? const Color(0x00000000) : glass.indicatorGlow,
+            ),
           ),
         ),
       ),
@@ -207,6 +225,7 @@ class _CapsulePainter extends CustomPainter {
     required this.from,
     required this.to,
     required this.progress,
+    required this.opacity,
     required this.stretch,
     required this.fill,
     required this.rim,
@@ -216,6 +235,10 @@ class _CapsulePainter extends CustomPainter {
   final double from;
   final double to;
   final double progress;
+
+  /// Scales every layer of the capsule, so it can hand the indicator role to the
+  /// brand mark on the centre slot.
+  final double opacity;
 
   /// Scales squash and stretch to zero under reduced motion.
   final double stretch;
@@ -231,6 +254,19 @@ class _CapsulePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (opacity <= 0.01) return;
+
+    // One layer for the whole capsule, so the fade is uniform. Scaling each
+    // layer's own alpha instead would let the rim outlive the fill and leave a
+    // floating outline behind.
+    final faded = opacity < 0.99;
+    if (faded) {
+      canvas.saveLayer(
+        null,
+        Paint()..color = const Color(0xFF000000).withValues(alpha: opacity),
+      );
+    }
+
     final slotWidth = size.width / ShellDestinations.count;
     final restWidth = math.min(slotWidth - _inset, _maxWidth);
     final restHeight = size.height - _inset * 2;
@@ -311,6 +347,8 @@ class _CapsulePainter extends CustomPainter {
         ),
     );
     canvas.restore();
+
+    if (faded) canvas.restore();
   }
 
   @override
@@ -318,17 +356,25 @@ class _CapsulePainter extends CustomPainter {
       old.progress != progress ||
       old.from != from ||
       old.to != to ||
+      old.opacity != opacity ||
       old.stretch != stretch ||
       old.rim != rim ||
       old.glow != glow;
 }
 
-/// The brand mark in the centre slot.
+/// The brand mark in the centre slot, which is its own indicator.
 ///
-/// Selection here is a lift and nothing else. The shared capsule already marks
-/// the destination in view, and an earlier version added a ring and a coloured
-/// glow on top of it, which stacked into a blob around the mark.
-class _HomeMark extends StatelessWidget {
+/// When the dashboard is the branch in view the mark lights up instead of taking
+/// a capsule: a brand coloured glow breathes behind the tile, and a specular band
+/// sweeps across its face and then rests. Using the logo as the marker for home
+/// says something a generic pill cannot, and it leaves the capsule free to mean
+/// only "one of the other four".
+///
+/// One controller drives both, on a cycle long enough that the sweep reads as an
+/// occasional catch of light rather than a loading state. The ticker only runs
+/// while home is selected, and under reduced motion it does not run at all,
+/// leaving a steady glow and no sweep.
+class _HomeMark extends StatefulWidget {
   const _HomeMark({
     required this.label,
     required this.isActive,
@@ -340,26 +386,199 @@ class _HomeMark extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Pressable(
-    onTap: onTap,
-    semanticLabel: '$label${isActive ? ', selected' : ''}',
-    borderRadius: AppRadius.pill,
-    child: Center(
-      child: TweenAnimationBuilder<double>(
-        tween: Tween<double>(end: isActive ? 1 : 0),
-        duration: Motion.resolve(context, Motion.medium),
-        curve: Motion.emphasized,
-        builder: (context, t, child) => Transform.scale(
-          scale: 1 + 0.08 * t,
-          child: Transform.translate(
-            offset: Offset(0, Motion.amount(context, -2) * t),
-            child: child,
-          ),
-        ),
-        child: const FrostMark(size: 38),
-      ),
-    ),
+  State<_HomeMark> createState() => _HomeMarkState();
+}
+
+class _HomeMarkState extends State<_HomeMark>
+    with SingleTickerProviderStateMixin {
+  static const double _size = 38;
+
+  /// Long, because most of the cycle is the pause after the sweep.
+  static const Duration _cycle = Duration(milliseconds: 3400);
+
+  late final AnimationController _beacon = AnimationController(
+    vsync: this,
+    duration: _cycle,
   );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(_HomeMark old) {
+    super.didUpdateWidget(old);
+    if (old.isActive != widget.isActive) _sync();
+  }
+
+  void _sync() {
+    final shouldRun = widget.isActive && !Motion.isReduced(context);
+    if (shouldRun == _beacon.isAnimating) return;
+    if (shouldRun) {
+      _beacon.repeat();
+    } else {
+      _beacon
+        ..stop()
+        ..value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _beacon.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.tokens;
+    final glass = Glass.of(context);
+
+    return Pressable(
+      onTap: widget.onTap,
+      semanticLabel: '${widget.label}${widget.isActive ? ', selected' : ''}',
+      borderRadius: AppRadius.pill,
+      child: Center(
+        child: TweenAnimationBuilder<double>(
+          tween: Tween<double>(end: widget.isActive ? 1 : 0),
+          duration: Motion.resolve(context, Motion.medium),
+          curve: Motion.emphasized,
+          builder: (context, selected, child) => Transform.scale(
+            scale: 1 + 0.08 * selected,
+            child: Transform.translate(
+              offset: Offset(0, Motion.amount(context, -2) * selected),
+              child: AnimatedBuilder(
+                animation: _beacon,
+                child: child,
+                builder: (context, mark) => CustomPaint(
+                  painter: _BeaconGlowPainter(
+                    selected: selected,
+                    phase: _beacon.value,
+                    glow: tokens.accent,
+                  ),
+                  foregroundPainter: _BeaconSweepPainter(
+                    selected: selected,
+                    phase: _beacon.value,
+                    sheen: glass.onGlass,
+                  ),
+                  child: mark,
+                ),
+              ),
+            ),
+          ),
+          child: const FrostMark(size: _size),
+        ),
+      ),
+    );
+  }
+}
+
+/// Corner radius the mark's tile is drawn with, as a share of its size. Matches
+/// [FrostMark], so the glow and the sweep sit exactly on the tile.
+const double _markRadiusRatio = 0.28;
+
+RRect _markShape(Size size) => RRect.fromRectAndRadius(
+  Offset.zero & size,
+  Radius.circular(size.shortestSide * _markRadiusRatio),
+);
+
+/// The breathing halo behind the mark. Two passes, a tight core and a wide bloom,
+/// because a single blurred fill reads as a smudge rather than as light.
+class _BeaconGlowPainter extends CustomPainter {
+  const _BeaconGlowPainter({
+    required this.selected,
+    required this.phase,
+    required this.glow,
+  });
+
+  final double selected;
+  final double phase;
+  final Color glow;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (selected <= 0.01) return;
+
+    final shape = _markShape(size);
+    // Rests at a little over half strength, so a stopped ticker still leaves the
+    // mark lit rather than dark.
+    final breath = 0.58 + 0.42 * math.sin(2 * math.pi * phase);
+    final amount = selected * breath;
+
+    canvas.drawRRect(
+      shape.inflate(3 + 5 * amount),
+      Paint()
+        ..color = glow.withValues(alpha: 0.14 + 0.24 * amount)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 9 + 9 * amount),
+    );
+    canvas.drawRRect(
+      shape.inflate(1),
+      Paint()
+        ..color = glow.withValues(alpha: 0.2 + 0.32 * amount)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 3 + 4 * amount),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _BeaconGlowPainter old) =>
+      old.selected != selected || old.phase != phase || old.glow != glow;
+}
+
+/// The specular band crossing the mark's face.
+///
+/// Travels corner to corner along the diagonal and occupies only the first part
+/// of the cycle, so the rest of the loop is a pause. Intensity rises and falls
+/// across the run, so the band never appears or vanishes mid face.
+class _BeaconSweepPainter extends CustomPainter {
+  const _BeaconSweepPainter({
+    required this.selected,
+    required this.phase,
+    required this.sheen,
+  });
+
+  final double selected;
+  final double phase;
+  final Color sheen;
+
+  /// Share of the cycle the band is travelling for.
+  static const Interval _window = Interval(0.06, 0.44, curve: Curves.easeInOut);
+
+  /// Half width of the band, in gradient units.
+  static const double _half = 0.13;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (selected <= 0.01) return;
+    final travel = _window.transform(phase);
+    if (travel <= 0 || travel >= 1) return;
+
+    // Kept inside the ends of the gradient so the three stops stay strictly
+    // increasing, which Gradient.linear requires.
+    final centre = _half + travel * (1 - 2 * _half);
+    final peak = math.sin(math.pi * travel) * selected;
+    final band = sheen.withValues(alpha: sheen.a * 0.72 * peak);
+    final clear = sheen.withValues(alpha: 0);
+
+    canvas.save();
+    canvas.clipRRect(_markShape(size));
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()
+        ..shader = ui.Gradient.linear(
+          Offset.zero,
+          Offset(size.width, size.height),
+          [clear, band, clear],
+          [centre - _half, centre, centre + _half],
+        ),
+    );
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _BeaconSweepPainter old) =>
+      old.selected != selected || old.phase != phase || old.sheen != sheen;
 }
 
 class _NavItem extends StatelessWidget {
