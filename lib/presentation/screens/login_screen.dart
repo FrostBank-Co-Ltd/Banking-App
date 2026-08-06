@@ -8,7 +8,7 @@ import '../../state/providers.dart';
 import '../widgets/brand.dart';
 import '../widgets/surfaces.dart';
 
-/// Password Authentication Screen used for re-authenticating after closing/backgrounding the app.
+/// Clean BPI Mobile-Style Sign-In Screen with quick 6-Digit PIN Pad navigation.
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -20,6 +20,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   late final TextEditingController _email;
   late final TextEditingController _password;
 
+  bool _obscurePassword = true;
+  bool _submitting = false;
+  String? _errorMessage;
+
   @override
   void initState() {
     super.initState();
@@ -29,10 +33,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     _password = TextEditingController(text: '');
   }
 
-  bool _obscure = true;
-  bool _submitting = false;
-  String? _errorMessage;
-
   @override
   void dispose() {
     _email.dispose();
@@ -40,7 +40,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
-  Future<void> _submit() async {
+  Future<void> _submitPassword() async {
     if (_submitting) return;
 
     final emailText = _email.text.trim();
@@ -57,6 +57,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _submitting = true;
       _errorMessage = null;
     });
+
     try {
       ref.read(preferencesProvider.notifier).setRememberedEmail(emailText);
       await ref
@@ -99,14 +100,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       letterSpacing: 0.5,
                     ),
                   ),
-                  const SizedBox(height: Space.x3),
+                  const SizedBox(height: Space.x2),
                   Text(
-                    'Enter your password to unlock your active session.',
+                    'Sign in using your account password or 6-digit PIN.',
                     style: AppType.bodyMedium.copyWith(
                       color: Colors.white.withValues(alpha: 0.76),
                     ),
                   ),
                   const SizedBox(height: Space.x6),
+
                   GlassPanel(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -143,6 +145,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                           const SizedBox(height: Space.x4),
                         ],
+
+                        // Shared Email Field
                         const FrostFieldLabel('Email'),
                         FrostField(
                           controller: _email,
@@ -151,21 +155,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           textInputAction: TextInputAction.next,
                           autofillHints: const [AutofillHints.email],
                         ),
+
                         const SizedBox(height: Space.x5),
+
                         const FrostFieldLabel('Password'),
                         FrostField(
                           controller: _password,
                           hint: 'Your password',
-                          obscure: _obscure,
+                          obscure: _obscurePassword,
                           textInputAction: TextInputAction.done,
-                          onSubmitted: (_) => _submit(),
+                          onSubmitted: (_) => _submitPassword(),
                           suffix: IconButton(
-                            onPressed: () =>
-                                setState(() => _obscure = !_obscure),
-                            tooltip:
-                                _obscure ? 'Show password' : 'Hide password',
+                            onPressed: () => setState(
+                              () => _obscurePassword = !_obscurePassword,
+                            ),
+                            tooltip: _obscurePassword
+                                ? 'Show password'
+                                : 'Hide password',
                             icon: Icon(
-                              _obscure
+                              _obscurePassword
                                   ? Icons.visibility_rounded
                                   : Icons.visibility_off_rounded,
                               size: 20,
@@ -181,23 +189,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             style: TextButton.styleFrom(
                               foregroundColor: Palette.frostIcePale,
                             ),
-                            child: const Text('Forgot password'),
+                            child: const Text('Forgot password?'),
                           ),
                         ),
                         const SizedBox(height: Space.x3),
                         SizedBox(
                           width: double.infinity,
-                          child: FilledButton(
-                            onPressed: _submitting ? null : _submit,
+                          child: FilledButton.icon(
+                            onPressed: _submitting ? null : _submitPassword,
                             style: FilledButton.styleFrom(
                               backgroundColor: Colors.white,
                               foregroundColor: Palette.frostBaseTop,
-                              disabledBackgroundColor: Colors.white.withValues(
-                                alpha: 0.7,
-                              ),
+                              disabledBackgroundColor:
+                                  Colors.white.withValues(alpha: 0.7),
                               disabledForegroundColor: Palette.frostBaseTop,
                             ),
-                            child: _submitting
+                            icon: const Icon(Icons.login_rounded, size: 18),
+                            label: _submitting
                                 ? const SizedBox(
                                     height: 20,
                                     width: 20,
@@ -206,47 +214,56 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                       color: Palette.frostBaseTop,
                                     ),
                                   )
-                                : const Text('Sign in'),
+                                : const Text('Sign in with Password'),
+                          ),
+                        ),
+                        const SizedBox(height: Space.x3),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              final emailText = _email.text.trim();
+                              if (emailText.isNotEmpty) {
+                                ref
+                                    .read(preferencesProvider.notifier)
+                                    .setRememberedEmail(emailText);
+                              }
+                              context.go('/pin-lock');
+                            },
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              side: BorderSide(
+                                color: Colors.white.withValues(alpha: 0.4),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                            ),
+                            icon: const Icon(Icons.pin_rounded, size: 18),
+                            label: const Text('Login with 6-Digit PIN Pad'),
                           ),
                         ),
                       ],
                     ),
                   ),
+
                   const SizedBox(height: Space.x6),
+
                   Center(
-                    child: Column(
+                    child: Wrap(
+                      alignment: WrapAlignment.center,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        TextButton.icon(
-                          onPressed: () => context.go('/pin-lock'),
-                          icon: const Icon(Icons.pin_rounded,
-                              color: Colors.white, size: 18),
-                          label: Text(
-                            'Use 6-Digit PIN Screen',
-                            style: AppType.bodyMedium.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
+                        Text(
+                          'New to FrostBank?',
+                          style: AppType.bodyMedium.copyWith(
+                            color: Colors.white.withValues(alpha: 0.72),
                           ),
                         ),
-                        const SizedBox(height: Space.x2),
-                        Wrap(
-                          alignment: WrapAlignment.center,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            Text(
-                              'New to FrostBank',
-                              style: AppType.bodyMedium.copyWith(
-                                color: Colors.white.withValues(alpha: 0.72),
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: () => context.go('/register'),
-                              style: TextButton.styleFrom(
-                                foregroundColor: Colors.white,
-                              ),
-                              child: const Text('Create account'),
-                            ),
-                          ],
+                        TextButton(
+                          onPressed: () => context.go('/register'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('Create account'),
                         ),
                       ],
                     ),
