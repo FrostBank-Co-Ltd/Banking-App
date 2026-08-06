@@ -35,7 +35,7 @@ class _CreateSplitBillScreenState extends ConsumerState<CreateSplitBillScreen> {
     'Other',
   ];
 
-  final List<String> _participants = ['Alice Johnson', 'Bob Smith'];
+  final List<String> _participants = [];
 
   @override
   void dispose() {
@@ -83,7 +83,8 @@ class _CreateSplitBillScreenState extends ConsumerState<CreateSplitBillScreen> {
     final form = _formKey.currentState;
     if (form == null || !form.validate()) return;
 
-    final rawAmount = double.tryParse(_amountController.text.replaceAll(',', '')) ?? 0.0;
+    final rawAmount =
+        double.tryParse(_amountController.text.replaceAll(',', '')) ?? 0.0;
     if (rawAmount <= 0 || rawAmount.isNaN) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a valid amount.')),
@@ -103,7 +104,7 @@ class _CreateSplitBillScreenState extends ConsumerState<CreateSplitBillScreen> {
     final cleanTitle = _titleController.text.trim();
     if (cleanTitle.isEmpty) return;
 
-    await ref.read(splitBillsProvider.notifier).createBill(
+    final success = await ref.read(splitBillsProvider.notifier).createBill(
           title: cleanTitle,
           totalAmount: rawAmount,
           category: _selectedCategory,
@@ -111,16 +112,22 @@ class _CreateSplitBillScreenState extends ConsumerState<CreateSplitBillScreen> {
         );
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Split bill created successfully!')),
-    );
 
-    if (Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
-    } else if (context.canPop()) {
-      context.pop();
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Split bill created successfully!')),
+      );
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      } else if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go('/split-bills');
+      }
     } else {
-      context.go('/split-bills');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to create bill. Please try again.')),
+      );
     }
   }
 
@@ -130,15 +137,18 @@ class _CreateSplitBillScreenState extends ConsumerState<CreateSplitBillScreen> {
     final prefs = ref.watch(preferencesProvider);
     final currency = prefs.activeCurrency;
 
-    final rawAmount = double.tryParse(_amountController.text.replaceAll(',', '')) ?? 0.0;
+    final rawAmount =
+        double.tryParse(_amountController.text.replaceAll(',', '')) ?? 0.0;
     final amount = (rawAmount.isNegative || rawAmount.isNaN) ? 0.0 : rawAmount;
     final totalPeople = _participants.length + 1; // Host + participants
-    final equalShare = (totalPeople > 0 && amount > 0) ? (amount / totalPeople) : 0.0;
+    final equalShare =
+        (totalPeople > 0 && amount > 0) ? (amount / totalPeople) : 0.0;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F8FE), // Touch of light blue tint for window
+      backgroundColor: tokens.background,
       appBar: AppBar(
         title: const Text('Create Split Bill'),
+        backgroundColor: tokens.background,
       ),
       body: ResponsiveShell(
         child: Form(
@@ -176,7 +186,8 @@ class _CreateSplitBillScreenState extends ConsumerState<CreateSplitBillScreen> {
               const SizedBox(height: Space.x2),
               TextFormField(
                 controller: _amountController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
                 decoration: InputDecoration(
                   hintText: '0.00',
                   prefixText: '${currency.symbol} ',
@@ -186,7 +197,9 @@ class _CreateSplitBillScreenState extends ConsumerState<CreateSplitBillScreen> {
                 validator: (val) {
                   if (val == null || val.trim().isEmpty) return 'Enter an amount';
                   final parsed = double.tryParse(val.replaceAll(',', ''));
-                  if (parsed == null || parsed <= 0) return 'Enter a valid amount';
+                  if (parsed == null || parsed <= 0) {
+                    return 'Enter a valid amount';
+                  }
                   return null;
                 },
               ),
@@ -231,6 +244,7 @@ class _CreateSplitBillScreenState extends ConsumerState<CreateSplitBillScreen> {
 
               // Add Participant Input
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: TextField(
@@ -243,12 +257,15 @@ class _CreateSplitBillScreenState extends ConsumerState<CreateSplitBillScreen> {
                     ),
                   ),
                   const SizedBox(width: Space.x3),
-                  SizedBox(
-                    height: 48,
-                    child: FilledButton.icon(
-                      onPressed: _addParticipant,
-                      icon: const Icon(Icons.add_rounded, size: 18),
-                      label: const Text('Add'),
+                  ElevatedButton.icon(
+                    onPressed: _addParticipant,
+                    icon: const Icon(Icons.add_rounded, size: 20),
+                    label: const Text('Add'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 16,
+                      ),
                     ),
                   ),
                 ],
@@ -268,7 +285,14 @@ class _CreateSplitBillScreenState extends ConsumerState<CreateSplitBillScreen> {
                     ListTile(
                       leading: CircleAvatar(
                         backgroundColor: tokens.interactivePrimary,
-                        child: const Text('YOU', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                        child: const Text(
+                          'YOU',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
                       title: const Text('You (Host)'),
                       subtitle: const Text('Creator • Auto-paid share'),
@@ -277,11 +301,18 @@ class _CreateSplitBillScreenState extends ConsumerState<CreateSplitBillScreen> {
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           MoneyText(equalShare, style: AppType.numericSmall),
-                          Text('Paid', style: TextStyle(color: tokens.accent, fontSize: 12, fontWeight: FontWeight.bold)),
+                          Text(
+                            'Paid',
+                            style: TextStyle(
+                              color: tokens.accent,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ],
                       ),
                     ),
-                    const Divider(height: 1),
+                    if (_participants.isNotEmpty) const Divider(height: 1),
 
                     for (var i = 0; i < _participants.length; i++) ...[
                       ListTile(
@@ -290,7 +321,7 @@ class _CreateSplitBillScreenState extends ConsumerState<CreateSplitBillScreen> {
                           backgroundColor: tokens.interactiveSecondary,
                           child: Text(
                             _participants[i].trim().isNotEmpty
-                                ? _participants[i].trim().substring(0, 1).toUpperCase()
+                                ? _participants[i].trim()[0].toUpperCase()
                                 : '?',
                             style: TextStyle(color: tokens.accent),
                           ),
@@ -316,7 +347,7 @@ class _CreateSplitBillScreenState extends ConsumerState<CreateSplitBillScreen> {
               ),
               const SizedBox(height: Space.x6),
 
-              // Dynamic Equal Split Summary with EXACT Dashboard FrostBackdrop Gradient
+              // Summary Banner
               FrostBackdrop(
                 borderRadius: AppRadius.all(AppRadius.md),
                 child: Padding(
@@ -369,11 +400,16 @@ class _CreateSplitBillScreenState extends ConsumerState<CreateSplitBillScreen> {
 
               // Submit Button
               SizedBox(
-                height: 50,
-                child: FilledButton.icon(
+                width: double.infinity,
+                child: ElevatedButton.icon(
                   onPressed: _submit,
                   icon: const Icon(Icons.check_rounded),
                   label: const Text('Create Split Bill'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    backgroundColor: tokens.interactivePrimary,
+                    foregroundColor: Colors.white,
+                  ),
                 ),
               ),
             ],

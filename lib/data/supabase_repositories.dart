@@ -896,6 +896,10 @@ class SupabaseSplitBillRepository implements SplitBillRepository {
     required double totalAmount,
     required String category,
     required List<String> participantNames,
+    SplitMode splitMode = SplitMode.equal,
+    List<double>? customAmounts,
+    List<double>? percentages,
+    String? description,
   }) async {
     final now = DateTime.now();
     final billId = 'bill_${now.millisecondsSinceEpoch}';
@@ -1017,6 +1021,42 @@ class SupabaseSplitBillRepository implements SplitBillRepository {
       return true;
     } catch (e) {
       throw RepositoryFailure('Could not confirm payment: $e');
+    }
+  }
+
+  @override
+  Future<SplitBill?> joinBill({
+    required String billId,
+    required String participantName,
+  }) async {
+    // For Supabase: fetch the bill, add the new participant with a
+    // recalculated equal share, then return the refreshed bill.
+    try {
+      final bill = await fetchSplitBill(billId);
+      final cleanName = participantName.trim();
+      if (cleanName.isEmpty) return bill;
+
+      final alreadyIn = bill.participants.any(
+        (p) => p.name.toLowerCase() == cleanName.toLowerCase(),
+      );
+      if (alreadyIn) return bill;
+
+      final newShare = bill.totalAmount / (bill.participants.length + 1);
+      final now = DateTime.now();
+      final newPartId = 'p_${billId}_join_${now.millisecondsSinceEpoch}';
+
+      await _client.from('split_bill_participants').insert({
+        'id': newPartId,
+        'bill_id': billId,
+        'name': cleanName,
+        'share_amount': newShare,
+        'status': 'pending',
+        'paid_at': null,
+      });
+
+      return await fetchSplitBill(billId);
+    } catch (e) {
+      throw RepositoryFailure('Could not join split bill: $e');
     }
   }
 }
