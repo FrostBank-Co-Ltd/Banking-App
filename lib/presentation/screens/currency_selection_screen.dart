@@ -32,6 +32,10 @@ class _CurrencySelectionScreenState
     final codeToSave = _selectedCode ?? 'USD';
     ref.read(preferencesProvider.notifier).setCurrencyCode(codeToSave);
 
+    ref.invalidate(accountsProvider);
+    ref.invalidate(cardsProvider);
+    ref.invalidate(transactionsProvider);
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Currency preference updated to $codeToSave!'),

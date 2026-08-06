@@ -471,9 +471,31 @@ class MockDataSource {
       return _profile;
     }
 
-    throw const RepositoryFailure(
-      'Invalid email or password. Account not found.',
+    final name = _formatNameFromEmail(cleanEmail);
+    final dynamicUser = UserProfile(
+      id: 'usr_${cleanEmail.hashCode.abs()}',
+      fullName: name,
+      email: cleanEmail,
+      mobile: '+82 10-3003-0924',
+      memberSince: DateTime.now(),
     );
+
+    _profile = dynamicUser;
+    _session = dynamicUser;
+    return dynamicUser;
+  }
+
+  String _formatNameFromEmail(String email) {
+    final prefix = email.split('@').first;
+    if (prefix.toLowerCase().contains('gaeul')) return 'Kim Gaeul (Gaeul)';
+    if (prefix.toLowerCase().contains('yujin')) return 'An Yujin';
+    if (prefix.toLowerCase().contains('wonyoung')) return 'Jang Wonyoung';
+    if (prefix.toLowerCase().contains('rei')) return 'Rei (Naoi Rei)';
+    if (prefix.toLowerCase().contains('liz')) return 'Liz (Kim Jiwon)';
+    if (prefix.toLowerCase().contains('leeseo') || prefix.toLowerCase().contains('hyunseo')) return 'Leeseo (Lee Hyunseo)';
+    final parts = prefix.split(RegExp(r'[._-]'));
+    final capitalized = parts.map((p) => p.isEmpty ? '' : '${p[0].toUpperCase()}${p.substring(1)}').join(' ');
+    return capitalized.isEmpty ? 'User' : capitalized;
   }
 
   /// Demo sign up. Takes the entered name and email into the seeded profile so

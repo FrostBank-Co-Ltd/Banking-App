@@ -34,6 +34,9 @@ abstract final class Money {
     'AUD': 'A\$',
   };
 
+  static String symbolFor(String currencyCode) =>
+      _currencySymbols[currencyCode] ?? '\$';
+
   static const Map<String, double> exchangeRates = {
     'USD': 1.0,
     'EUR': 0.92,
@@ -57,9 +60,6 @@ abstract final class Money {
     final baseUsd = amount / rateFrom;
     return baseUsd * rateTo;
   }
-
-  static String symbolFor(String currencyCode) =>
-      _currencySymbols[currencyCode] ?? (currencyCode == 'USD' ? '\$' : '');
 
   /// Visible figure, for example `$12,480.55`.
   static String format(

@@ -32,7 +32,7 @@ class Preferences {
     this.themeMode = ThemeMode.system,
     this.balancesHidden = false,
     this.currencyCode = 'USD',
-    this.rememberedEmail = 'ava.mercado@frostbank.app',
+    this.rememberedEmail,
   });
 
   final ThemeMode themeMode;
@@ -54,15 +54,19 @@ class Preferences {
     ThemeMode? themeMode,
     bool? balancesHidden,
     String? currencyCode,
-    String? rememberedEmail,
+    Object? rememberedEmail = _absent,
   }) =>
       Preferences(
         themeMode: themeMode ?? this.themeMode,
         balancesHidden: balancesHidden ?? this.balancesHidden,
         currencyCode: currencyCode ?? this.currencyCode,
-        rememberedEmail: rememberedEmail ?? this.rememberedEmail,
+        rememberedEmail: rememberedEmail == _absent
+            ? this.rememberedEmail
+            : rememberedEmail as String?,
       );
 }
+
+const Object _absent = Object();
 
 class PreferencesController extends Notifier<Preferences> {
   @override
@@ -79,4 +83,7 @@ class PreferencesController extends Notifier<Preferences> {
 
   void setRememberedEmail(String? email) =>
       state = state.copyWith(rememberedEmail: email);
+
+  void clearRememberedEmail() =>
+      state = state.copyWith(rememberedEmail: null);
 }

@@ -17,10 +17,17 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  late final TextEditingController _email =
-      TextEditingController(text: 'ava.mercado@frostbank.app');
-  late final TextEditingController _password =
-      TextEditingController(text: 'frost2026');
+  late final TextEditingController _email;
+  late final TextEditingController _password;
+
+  @override
+  void initState() {
+    super.initState();
+    final prefs = ref.read(preferencesProvider);
+    final email = prefs.rememberedEmail ?? '';
+    _email = TextEditingController(text: email);
+    _password = TextEditingController(text: '');
+  }
 
   bool _obscure = true;
   bool _submitting = false;
@@ -55,6 +62,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       await ref
           .read(sessionProvider.notifier)
           .signIn(email: emailText, password: passwordText);
+      if (mounted) context.go('/');
     } catch (e) {
       if (mounted) {
         setState(() {

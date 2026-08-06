@@ -29,7 +29,7 @@ class ProfileScreen extends ConsumerWidget {
             Space.x5,
             Space.x2,
             Space.x5,
-            Space.x16 + Space.x8,
+            Space.x16 + Space.x16,
           ),
           children: [
             AsyncSection<UserProfile>(
@@ -174,14 +174,21 @@ class ProfileScreen extends ConsumerWidget {
               style: AppType.bodySmall.copyWith(color: tokens.textSecondary),
             ),
             const SizedBox(height: Space.x8),
-            FilledButton.icon(
-              onPressed: () => _confirmLogout(context, ref),
-              style: FilledButton.styleFrom(
-                backgroundColor: tokens.error,
-                foregroundColor: Colors.white,
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: FilledButton.icon(
+                onPressed: () => _confirmLogout(context, ref),
+                style: FilledButton.styleFrom(
+                  backgroundColor: tokens.error,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: AppRadius.all(AppRadius.pill),
+                  ),
+                ),
+                icon: const Icon(Icons.logout_rounded, size: 18),
+                label: const Text('Log out'),
               ),
-              icon: const Icon(Icons.logout_rounded, size: 18),
-              label: const Text('Log out'),
             ),
           ],
         ),
@@ -190,19 +197,76 @@ class ProfileScreen extends ConsumerWidget {
   }
 
   Future<void> _confirmLogout(BuildContext context, WidgetRef ref) async {
+    final tokens = context.tokens;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Log out'),
-        content: const Text('You will need to sign in again to see your accounts.'),
+        backgroundColor: tokens.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(Space.x2),
+              decoration: BoxDecoration(
+                color: tokens.error.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.logout_rounded, color: tokens.error, size: 22),
+            ),
+            const SizedBox(width: Space.x3),
+            Expanded(
+              child: Text(
+                'Log out',
+                style: AppType.titleMedium.copyWith(color: tokens.textPrimary),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to log out? You will need to sign in again to access your accounts.',
+          style: AppType.bodyMedium.copyWith(color: tokens.textSecondary),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(
+          Space.x4,
+          0,
+          Space.x4,
+          Space.x4,
+        ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Stay'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Log out'),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: tokens.textPrimary,
+                    side: BorderSide(color: tokens.border),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: Space.x3),
+                  ),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: Space.x3),
+              Expanded(
+                child: FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: tokens.error,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: Space.x3),
+                  ),
+                  child: const Text('Log Out'),
+                ),
+              ),
+            ],
           ),
         ],
       ),

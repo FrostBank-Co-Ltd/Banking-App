@@ -267,9 +267,13 @@ final promosProvider = FutureProvider<List<Promo>>(
   (ref) => ref.watch(promoRepositoryProvider).fetchPromos(),
 );
 
-final profileProvider = FutureProvider<UserProfile>(
-  (ref) => ref.watch(profileRepositoryProvider).fetchProfile(),
-);
+final profileProvider = FutureProvider<UserProfile>((ref) async {
+  final session = ref.watch(sessionProvider);
+  if (session is SessionSignedIn) {
+    return session.profile;
+  }
+  return ref.watch(profileRepositoryProvider).fetchProfile();
+});
 
 /// Dashboard selection. Null resolves to the first seeded account.
 final selectedAccountIdProvider =

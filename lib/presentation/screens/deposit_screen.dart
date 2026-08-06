@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/design/tokens.dart';
+import '../../core/format/money.dart';
 import '../../domain/models.dart';
 import '../../domain/repositories.dart';
 import '../../state/providers.dart';
@@ -35,6 +37,16 @@ class _DepositScreenState extends ConsumerState<DepositScreen> {
       return;
     }
 
+    final prefs = ref.read(preferencesProvider);
+    final symbol = prefs.activeCurrency.symbol;
+    final currencyCode = prefs.currencyCode;
+
+    final baseUsdAmount = Money.convert(
+      inputAmount,
+      fromCurrency: currencyCode,
+      toCurrency: 'USD',
+    );
+
     final refCode = 'DEP-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -44,19 +56,19 @@ class _DepositScreenState extends ConsumerState<DepositScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: isDark ? const Color(0xFF1E1E32) : Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Deposit Receipt (POC)', style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
+        title: Text('Deposit Receipt', style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Destination: ${account.name}', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)),
             const SizedBox(height: 8),
-            Text('Inputted Amount: ₱${inputAmount.toStringAsFixed(2)}', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)),
+            Text('Inputted Amount: $symbol${inputAmount.toStringAsFixed(2)}', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)),
             const SizedBox(height: 8),
             Text('Reference Code: $refCode', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black)),
             const Divider(height: 24),
             Text(
-              'To complete this deposit in the real world, input this reference code at a cash machine. \n\nFor this POC, closing this dialog will simulate a machine deposit and add a default of ₱100.00 to your account.',
+              'To complete this deposit in the real world, input this reference code at a cash machine. \n\nClosing this dialog will simulate a machine deposit to your account.',
               style: TextStyle(fontSize: 12, color: isDark ? Colors.white54 : Colors.grey),
             ),
           ],
@@ -71,9 +83,9 @@ class _DepositScreenState extends ConsumerState<DepositScreen> {
               ),
               onPressed: () async {
                 Navigator.pop(ctx); 
-                await _executeDefaultDeposit(account); 
+                await _executeDefaultDeposit(account, baseUsdAmount, inputAmount, symbol); 
               },
-              child: const Text('Close & Deposit ₱100.00', style: TextStyle(color: Colors.white)),
+              child: Text('Confirm Deposit ($symbol${inputAmount.toStringAsFixed(2)})', style: const TextStyle(color: Colors.white)),
             ),
           ),
         ],
@@ -81,17 +93,16 @@ class _DepositScreenState extends ConsumerState<DepositScreen> {
     );
   }
 
-  Future<void> _executeDefaultDeposit(Account account) async {
+  Future<void> _executeDefaultDeposit(Account account, double baseUsdAmount, double inputAmount, String symbol) async {
     setState(() {
       _submitting = true;
       _errorMessage = null;
     });
 
     try {
-      const double hackathonDefaultAmount = 100.0;
       await ref.read(accountRepositoryProvider).deposit(
             accountId: account.id,
-            amount: hackathonDefaultAmount,
+            amount: baseUsdAmount,
           );
 
       ref.invalidate(accountsProvider);
@@ -101,7 +112,7 @@ class _DepositScreenState extends ConsumerState<DepositScreen> {
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Simulated machine deposit of ₱100.00 to ${account.name} successful!')),
+          SnackBar(content: Text('Deposit of $symbol${inputAmount.toStringAsFixed(2)} to ${account.name} successful!')),
         );
       }
     } catch (e) {
@@ -114,6 +125,7 @@ class _DepositScreenState extends ConsumerState<DepositScreen> {
   @override
   Widget build(BuildContext context) {
     final accountsAsync = ref.watch(accountsProvider);
+    final activeSymbol = ref.watch(preferencesProvider).activeCurrency.symbol;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
     // Themed Input Decoration
@@ -186,7 +198,7 @@ class _DepositScreenState extends ConsumerState<DepositScreen> {
                   ],
                   style: TextStyle(color: isDark ? Colors.white : Colors.black),
                   decoration: inputDecoration.copyWith(
-                    prefixText: '₱ ',
+                    prefixText: '$activeSymbol ',
                     prefixStyle: TextStyle(color: isDark ? Colors.white : Colors.black, fontSize: 16),
                     hintText: '0.00',
                   ),
@@ -198,11 +210,11 @@ class _DepositScreenState extends ConsumerState<DepositScreen> {
                 const Spacer(),
                 SizedBox(
                   width: double.infinity,
-                  height: 54,
+                  height: 52,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: isDark ? const Color(0xFF4A4A7A) : const Color(0xFF003366),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.pill)),
                     ),
                     onPressed: _submitting ? null : () => _submit(selectedAccount),
                     child: _submitting

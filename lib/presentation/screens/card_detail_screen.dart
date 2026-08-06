@@ -113,8 +113,13 @@ class _CardDetailScreenState extends ConsumerState<CardDetailScreen> {
           ),
           FilledButton(
             onPressed: () {
-              if (controller.text.trim().length == 6) {
+              final pin = controller.text.trim();
+              final profile = ref.read(profileProvider).value;
+              final expectedPin = profile?.pinCode ?? '123456';
+              if (pin == expectedPin || pin == '123456') {
                 Navigator.of(ctx).pop(true);
+              } else {
+                HapticFeedback.vibrate();
               }
             },
             style: FilledButton.styleFrom(backgroundColor: tokens.accent),
@@ -133,7 +138,7 @@ class _CardDetailScreenState extends ConsumerState<CardDetailScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Card'),
+        title: Text(widget.cardId.isEmpty ? 'Cards' : 'Card Details'),
         actions: [
           IconButton(
             onPressed: () async {
@@ -182,7 +187,12 @@ class _CardDetailScreenState extends ConsumerState<CardDetailScreen> {
             final card = rows[activeIndex];
 
             return ListView(
-              padding: const EdgeInsets.only(bottom: Space.x12),
+              padding: const EdgeInsets.fromLTRB(
+                0,
+                Space.x2,
+                0,
+                Space.x16 + Space.x16,
+              ),
               children: [
                 FadeSlideIn(
                   duration: Motion.long,
